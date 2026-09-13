@@ -1,0 +1,20 @@
+name: pdfium_dart
+description: Dart FFI bindings for PDFium library. Provides low-level access to PDFium's C API from Dart.
+version: 0.2.5
+homepage: https://github.com/espresso3389/pdfrx
+repository: https://github.com/espresso3389/pdfrx/tree/master/packages/pdfium_dart
+issue_tracker: https://github.com/espresso3389/pdfrx/issues
+
+environment:
+  sdk: ^3.10.0
+# 【MindSpace 本地补丁】移除 resolution: workspace，使其可作为 path 依赖被主工程覆盖。
+
+dependencies:
+  archive:
+  code_assets:
+  ffi:
+  hooks:
+  http:
+
+# 【MindSpace 本地补丁】移除仅用于重新生成 FFI 绑定的 dev_dependencies
+# （ffigen/lints/test），绑定产物已在 lib/ 中，应用构建无需这些工具。

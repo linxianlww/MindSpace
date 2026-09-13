@@ -1,0 +1,55 @@
+import 'package:flutter/material.dart';
+
+/// Material 3 Expressive 设计令牌。
+///
+/// MD3E 强调大圆角、柔和高度、弹性动效与鲜明色彩，这里集中管理，
+/// 避免各页面硬编码数值导致风格不一致。
+class Md3eTokens {
+  const Md3eTokens._();
+
+  // —— 圆角 ——
+  static const double radiusCard = 26; // 卡片 24~28
+  static const double radiusDialog = 28;
+  static const double radiusFab = 20; // FAB 16~20
+  static const double radiusSheet = 28;
+  static const double radiusChip = 16;
+  static const double radiusBar = 22;
+
+  static const BorderRadius cardBorder =
+      BorderRadius.all(Radius.circular(radiusCard));
+  static const BorderRadius dialogBorder =
+      BorderRadius.all(Radius.circular(radiusDialog));
+  static const BorderRadius sheetBorder = BorderRadius.vertical(
+    top: Radius.circular(radiusSheet),
+  );
+
+  // —— 间距 ——
+  static const double gapS = 8;
+  static const double gapM = 16;
+  static const double gapL = 24;
+  static const EdgeInsets pagePadding = EdgeInsets.all(16);
+
+  // —— 动效：MD3E 偏好的弹性/强调曲线 ——
+  static const Duration fast = Duration(milliseconds: 180);
+  static const Duration medium = Duration(milliseconds: 320);
+  static const Curve emphasized = Curves.easeOutBack; // FAB 展开弹性
+  static const Curve standard = Curves.easeOutCubic;
+
+  // —— 瀑布流 ——
+  /// 依据宽度决定列数：手机双列，平板/折叠屏更多列。
+  static int masonryColumns(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 800) return 3;
+    return 2;
+  }
+
+  // —— 备选种子色板（设置页可切换）——
+  static const Map<String, Color> seedPalette = {
+    '靛蓝': Color(0xFF5B5BD6),
+    '青绿': Color(0xFF00696E),
+    '暖橙': Color(0xFF8B4A00),
+    '玫红': Color(0xFFB0005B),
+    '森绿': Color(0xFF3B6B2E),
+    '深紫': Color(0xFF6750A4),
+  };
+}
