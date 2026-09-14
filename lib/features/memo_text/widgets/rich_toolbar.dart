@@ -56,14 +56,8 @@ class _RichToolbarState extends State<RichToolbar> {
   @override
   Widget build(BuildContext context) {
     final items = <ToolbarItem>[
-      ToolbarItem(
-          icon: Icons.undo,
-          tooltip: '撤销',
-          onTap: () => c.undo()),
-      ToolbarItem(
-          icon: Icons.redo,
-          tooltip: '重做',
-          onTap: () => c.redo()),
+      ToolbarItem(icon: Icons.undo, tooltip: '撤销', onTap: () => c.undo()),
+      ToolbarItem(icon: Icons.redo, tooltip: '重做', onTap: () => c.redo()),
       ToolbarItem(
           icon: Icons.format_bold,
           tooltip: '加粗',
@@ -84,10 +78,7 @@ class _RichToolbarState extends State<RichToolbar> {
           tooltip: '删除线',
           active: _has(Attribute.strikeThrough.key),
           onTap: () => _toggleInline(Attribute.strikeThrough)),
-      ToolbarItem(
-          icon: Icons.text_fields,
-          tooltip: '标题',
-          onTap: _pickHeader),
+      ToolbarItem(icon: Icons.text_fields, tooltip: '标题', onTap: _pickHeader),
       ToolbarItem(
           icon: Icons.format_list_bulleted,
           tooltip: '无序列表',
@@ -113,10 +104,7 @@ class _RichToolbarState extends State<RichToolbar> {
           tooltip: '代码块',
           active: _has(Attribute.codeBlock.key),
           onTap: () => _toggleBlock(Attribute.codeBlock)),
-      ToolbarItem(
-          icon: Icons.link,
-          tooltip: '链接',
-          onTap: _insertLink),
+      ToolbarItem(icon: Icons.link, tooltip: '链接', onTap: _insertLink),
       ToolbarItem(
           icon: Icons.palette_outlined,
           tooltip: '文字颜色/高亮',
@@ -144,22 +132,26 @@ class _RichToolbarState extends State<RichToolbar> {
   Future<void> _pickHeader() async {
     final selected = await showModalBottomSheet<Attribute?>(
       context: context,
+      // 横屏（高度受限）下允许 sheet 占满全屏。
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final entry in const [
-              ('正文', null),
-              ('H1', Attribute.h1),
-              ('H2', Attribute.h2),
-              ('H3', Attribute.h3),
-              ('H4', Attribute.h4),
-            ])
-              ListTile(
-                title: Text(entry.$1),
-                onTap: () => Navigator.pop(ctx, entry.$2),
-              ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final entry in const [
+                ('正文', null),
+                ('H1', Attribute.h1),
+                ('H2', Attribute.h2),
+                ('H3', Attribute.h3),
+                ('H4', Attribute.h4),
+              ])
+                ListTile(
+                  title: Text(entry.$1),
+                  onTap: () => Navigator.pop(ctx, entry.$2),
+                ),
+            ],
+          ),
         ),
       ),
     );

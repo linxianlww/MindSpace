@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
+import '../../core/router/app_router.dart';
 import '../../core/router/memo_nav.dart';
 import '../../core/theme/md3e_tokens.dart';
 import '../../core/widgets/state_views.dart';
 import '../../data/models/memo_type.dart';
 import 'home_provider.dart';
 import 'widgets/create_fab.dart';
+import 'widgets/folder_actions.dart';
 import 'widgets/folder_nav.dart';
 import 'widgets/memo_actions.dart';
 import 'widgets/memo_masonry.dart';
@@ -22,14 +24,31 @@ class HomePage extends ConsumerStatefulWidget {
   ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends ConsumerState<HomePage> {
+class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   bool _searching = false;
   final _searchCtrl = TextEditingController();
 
   @override
   void dispose() {
+    rootRouteObserver.unsubscribe(this);
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    rootRouteObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void didPopNext() {
+    // 离开主界面再返回时，自动收起搜索框并清空关键字。
+    if (_searching) {
+      setState(() => _searching = false);
+    }
+    _searchCtrl.clear();
+    ref.read(searchKeywordProvider.notifier).state = '';
   }
 
   @override
@@ -37,6 +56,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     final folderId = ref.watch(currentFolderIdProvider);
     final foldersAsync = ref.watch(folderListProvider(folderId));
     final memosAsync = ref.watch(memoListProvider(folderId));
+    final keyword = ref.watch(searchKeywordProvider).trim();
+    final searching = keyword.isNotEmpty;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -51,7 +72,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       controller: _searchCtrl,
                       autofocus: true,
                       decoration: InputDecoration(
-                        hintText: '搜索标题或备注',
+                        hintText: '搜索标题、正文或备注',
                         isDense: true,
                         prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
@@ -98,35 +119,42 @@ class _HomePageState extends ConsumerState<HomePage> {
               ],
             ),
             SliverToBoxAdapter(child: FolderNav(currentFolderId: folderId)),
-            // 子文件夹横向条
-            foldersAsync.maybeWhen(
-              data: (folders) => folders.isEmpty
-                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
-                  : SliverToBoxAdapter(
-                      child: SizedBox(
-                        height: 44,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: folders.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (_, i) {
-                            final f = folders[i];
-                            return ActionChip(
-                              avatar: const Icon(Icons.folder_outlined,
-                                  size: 18),
-                              label: Text(f.name),
-                              onPressed: () => ref
-                                  .read(currentFolderIdProvider.notifier)
-                                  .state = f.id,
-                            );
-                          },
+            // 子文件夹横向条（搜索态下不展示文件夹，避免混入搜索结果）
+            if (!searching)
+              foldersAsync.maybeWhen(
+                data: (folders) => folders.isEmpty
+                    ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                    : SliverToBoxAdapter(
+                        child: SizedBox(
+                          height: 44,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: folders.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 8),
+                            itemBuilder: (_, i) {
+                              final f = folders[i];
+                              return GestureDetector(
+                                onLongPress: () =>
+                                    FolderActions.show(context, ref, f),
+                                child: ActionChip(
+                                  avatar: const Icon(Icons.folder_outlined,
+                                      size: 18),
+                                  label: Text(f.name),
+                                  onPressed: () => ref
+                                      .read(currentFolderIdProvider.notifier)
+                                      .state = f.id,
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-              orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-            ),
+                orElse: () =>
+                    const SliverToBoxAdapter(child: SizedBox.shrink()),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 4)),
             memosAsync.when(
               loading: () => const SliverFillRemaining(

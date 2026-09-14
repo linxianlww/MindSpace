@@ -9,6 +9,7 @@ import '../../core/widgets/state_views.dart';
 import '../../data/models/memo_type.dart';
 import '../home/home_provider.dart';
 import '../home/widgets/create_fab.dart';
+import '../home/widgets/folder_actions.dart';
 import '../home/widgets/memo_actions.dart';
 import '../home/widgets/memo_masonry.dart';
 import 'folder_provider.dart';
@@ -57,11 +58,15 @@ class FolderPage extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: list.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (_, i) => ActionChip(
-                        avatar: const Icon(Icons.folder_outlined, size: 18),
-                        label: Text(list[i].name),
-                        onPressed: () =>
-                            context.push('/folder/${list[i].id}'),
+                      itemBuilder: (_, i) => GestureDetector(
+                        onLongPress: () =>
+                            FolderActions.show(context, ref, list[i]),
+                        child: ActionChip(
+                          avatar: const Icon(Icons.folder_outlined, size: 18),
+                          label: Text(list[i].name),
+                          onPressed: () =>
+                              context.push('/folder/${list[i].id}'),
+                        ),
                       ),
                     ),
                   ),

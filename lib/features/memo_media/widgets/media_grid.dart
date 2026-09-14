@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/utils/screen_utils.dart';
 import '../../../data/models/media_item.dart';
 import 'media_thumb.dart';
 
@@ -23,7 +24,9 @@ class MediaGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final crossAxis = width >= 800 ? 4 : 3;
+    // 列数按实际宽度推导（每格至少约 150 逻辑像素），
+    // 1:1 小屏降列、横屏平板加列，避免格子过大/过密。
+    final crossAxis = ScreenUtils.columns(width, minCell: 150, maxColumns: 6);
     return GridView.builder(
       padding: const EdgeInsets.all(12),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -58,8 +61,8 @@ class MediaGrid extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 12,
                   backgroundColor: Colors.black45,
-                  child: Icon(Icons.drag_indicator,
-                      size: 16, color: Colors.white),
+                  child:
+                      Icon(Icons.drag_indicator, size: 16, color: Colors.white),
                 ),
               ),
           ],
@@ -92,7 +95,8 @@ class MediaGrid extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18),
                   border: candidate.isNotEmpty
                       ? Border.all(
-                          color: Theme.of(context).colorScheme.primary, width: 2)
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2)
                       : null,
                 ),
                 child: cell,

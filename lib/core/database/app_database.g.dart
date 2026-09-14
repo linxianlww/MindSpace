@@ -1027,6 +1027,12 @@ class $MediaItemRowsTable extends MediaItemRows
   late final GeneratedColumn<int> duration = GeneratedColumn<int>(
       'duration', aliasedName, true,
       type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _thumbPathMeta =
+      const VerificationMeta('thumbPath');
+  @override
+  late final GeneratedColumn<String> thumbPath = GeneratedColumn<String>(
+      'thumb_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -1044,6 +1050,7 @@ class $MediaItemRowsTable extends MediaItemRows
         width,
         height,
         duration,
+        thumbPath,
         createdAt
       ];
   @override
@@ -1099,6 +1106,10 @@ class $MediaItemRowsTable extends MediaItemRows
       context.handle(_durationMeta,
           duration.isAcceptableOrUnknown(data['duration']!, _durationMeta));
     }
+    if (data.containsKey('thumb_path')) {
+      context.handle(_thumbPathMeta,
+          thumbPath.isAcceptableOrUnknown(data['thumb_path']!, _thumbPathMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -1132,6 +1143,8 @@ class $MediaItemRowsTable extends MediaItemRows
           .read(DriftSqlType.int, data['${effectivePrefix}height']),
       duration: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}duration']),
+      thumbPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}thumb_path']),
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}created_at'])!,
     );
@@ -1153,6 +1166,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
   final int? width;
   final int? height;
   final int? duration;
+  final String? thumbPath;
   final int createdAt;
   const MediaItemRow(
       {required this.id,
@@ -1164,6 +1178,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
       this.width,
       this.height,
       this.duration,
+      this.thumbPath,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1185,6 +1200,9 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
     if (!nullToAbsent || duration != null) {
       map['duration'] = Variable<int>(duration);
     }
+    if (!nullToAbsent || thumbPath != null) {
+      map['thumb_path'] = Variable<String>(thumbPath);
+    }
     map['created_at'] = Variable<int>(createdAt);
     return map;
   }
@@ -1205,6 +1223,9 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
       duration: duration == null && nullToAbsent
           ? const Value.absent()
           : Value(duration),
+      thumbPath: thumbPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(thumbPath),
       createdAt: Value(createdAt),
     );
   }
@@ -1222,6 +1243,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
       width: serializer.fromJson<int?>(json['width']),
       height: serializer.fromJson<int?>(json['height']),
       duration: serializer.fromJson<int?>(json['duration']),
+      thumbPath: serializer.fromJson<String?>(json['thumbPath']),
       createdAt: serializer.fromJson<int>(json['createdAt']),
     );
   }
@@ -1238,6 +1260,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
       'width': serializer.toJson<int?>(width),
       'height': serializer.toJson<int?>(height),
       'duration': serializer.toJson<int?>(duration),
+      'thumbPath': serializer.toJson<String?>(thumbPath),
       'createdAt': serializer.toJson<int>(createdAt),
     };
   }
@@ -1252,6 +1275,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
           Value<int?> width = const Value.absent(),
           Value<int?> height = const Value.absent(),
           Value<int?> duration = const Value.absent(),
+          Value<String?> thumbPath = const Value.absent(),
           int? createdAt}) =>
       MediaItemRow(
         id: id ?? this.id,
@@ -1263,6 +1287,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
         width: width.present ? width.value : this.width,
         height: height.present ? height.value : this.height,
         duration: duration.present ? duration.value : this.duration,
+        thumbPath: thumbPath.present ? thumbPath.value : this.thumbPath,
         createdAt: createdAt ?? this.createdAt,
       );
   MediaItemRow copyWithCompanion(MediaItemRowsCompanion data) {
@@ -1276,6 +1301,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
       width: data.width.present ? data.width.value : this.width,
       height: data.height.present ? data.height.value : this.height,
       duration: data.duration.present ? data.duration.value : this.duration,
+      thumbPath: data.thumbPath.present ? data.thumbPath.value : this.thumbPath,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -1292,6 +1318,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
           ..write('width: $width, ')
           ..write('height: $height, ')
           ..write('duration: $duration, ')
+          ..write('thumbPath: $thumbPath, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -1299,7 +1326,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
 
   @override
   int get hashCode => Object.hash(id, memoId, path, type, remark, sortOrder,
-      width, height, duration, createdAt);
+      width, height, duration, thumbPath, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1313,6 +1340,7 @@ class MediaItemRow extends DataClass implements Insertable<MediaItemRow> {
           other.width == this.width &&
           other.height == this.height &&
           other.duration == this.duration &&
+          other.thumbPath == this.thumbPath &&
           other.createdAt == this.createdAt);
 }
 
@@ -1326,6 +1354,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
   final Value<int?> width;
   final Value<int?> height;
   final Value<int?> duration;
+  final Value<String?> thumbPath;
   final Value<int> createdAt;
   final Value<int> rowid;
   const MediaItemRowsCompanion({
@@ -1338,6 +1367,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
     this.width = const Value.absent(),
     this.height = const Value.absent(),
     this.duration = const Value.absent(),
+    this.thumbPath = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -1351,6 +1381,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
     this.width = const Value.absent(),
     this.height = const Value.absent(),
     this.duration = const Value.absent(),
+    this.thumbPath = const Value.absent(),
     required int createdAt,
     this.rowid = const Value.absent(),
   })  : id = Value(id),
@@ -1368,6 +1399,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
     Expression<int>? width,
     Expression<int>? height,
     Expression<int>? duration,
+    Expression<String>? thumbPath,
     Expression<int>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -1381,6 +1413,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
       if (width != null) 'width': width,
       if (height != null) 'height': height,
       if (duration != null) 'duration': duration,
+      if (thumbPath != null) 'thumb_path': thumbPath,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -1396,6 +1429,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
       Value<int?>? width,
       Value<int?>? height,
       Value<int?>? duration,
+      Value<String?>? thumbPath,
       Value<int>? createdAt,
       Value<int>? rowid}) {
     return MediaItemRowsCompanion(
@@ -1408,6 +1442,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
       width: width ?? this.width,
       height: height ?? this.height,
       duration: duration ?? this.duration,
+      thumbPath: thumbPath ?? this.thumbPath,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -1443,6 +1478,9 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
     if (duration.present) {
       map['duration'] = Variable<int>(duration.value);
     }
+    if (thumbPath.present) {
+      map['thumb_path'] = Variable<String>(thumbPath.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(createdAt.value);
     }
@@ -1464,6 +1502,7 @@ class MediaItemRowsCompanion extends UpdateCompanion<MediaItemRow> {
           ..write('width: $width, ')
           ..write('height: $height, ')
           ..write('duration: $duration, ')
+          ..write('thumbPath: $thumbPath, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -3013,6 +3052,7 @@ typedef $$MediaItemRowsTableCreateCompanionBuilder = MediaItemRowsCompanion
   Value<int?> width,
   Value<int?> height,
   Value<int?> duration,
+  Value<String?> thumbPath,
   required int createdAt,
   Value<int> rowid,
 });
@@ -3027,6 +3067,7 @@ typedef $$MediaItemRowsTableUpdateCompanionBuilder = MediaItemRowsCompanion
   Value<int?> width,
   Value<int?> height,
   Value<int?> duration,
+  Value<String?> thumbPath,
   Value<int> createdAt,
   Value<int> rowid,
 });
@@ -3066,6 +3107,9 @@ class $$MediaItemRowsTableFilterComposer
 
   ColumnFilters<int> get duration => $composableBuilder(
       column: $table.duration, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get thumbPath => $composableBuilder(
+      column: $table.thumbPath, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3107,6 +3151,9 @@ class $$MediaItemRowsTableOrderingComposer
   ColumnOrderings<int> get duration => $composableBuilder(
       column: $table.duration, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get thumbPath => $composableBuilder(
+      column: $table.thumbPath, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<int> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -3147,6 +3194,9 @@ class $$MediaItemRowsTableAnnotationComposer
   GeneratedColumn<int> get duration =>
       $composableBuilder(column: $table.duration, builder: (column) => column);
 
+  GeneratedColumn<String> get thumbPath =>
+      $composableBuilder(column: $table.thumbPath, builder: (column) => column);
+
   GeneratedColumn<int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 }
@@ -3186,6 +3236,7 @@ class $$MediaItemRowsTableTableManager extends RootTableManager<
             Value<int?> width = const Value.absent(),
             Value<int?> height = const Value.absent(),
             Value<int?> duration = const Value.absent(),
+            Value<String?> thumbPath = const Value.absent(),
             Value<int> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3199,6 +3250,7 @@ class $$MediaItemRowsTableTableManager extends RootTableManager<
             width: width,
             height: height,
             duration: duration,
+            thumbPath: thumbPath,
             createdAt: createdAt,
             rowid: rowid,
           ),
@@ -3212,6 +3264,7 @@ class $$MediaItemRowsTableTableManager extends RootTableManager<
             Value<int?> width = const Value.absent(),
             Value<int?> height = const Value.absent(),
             Value<int?> duration = const Value.absent(),
+            Value<String?> thumbPath = const Value.absent(),
             required int createdAt,
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -3225,6 +3278,7 @@ class $$MediaItemRowsTableTableManager extends RootTableManager<
             width: width,
             height: height,
             duration: duration,
+            thumbPath: thumbPath,
             createdAt: createdAt,
             rowid: rowid,
           ),

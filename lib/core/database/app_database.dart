@@ -31,14 +31,16 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) => m.createAll(),
         onUpgrade: (m, from, to) async {
-          // 后续版本在此按版本号增量迁移，保证用户数据不丢。
-          // 示例：if (from < 2) await m.addColumn(memoRows, memoRows.xxx);
+          // v2：媒体集条目增加缩略图路径列，保证主界面能显示首图缩略图。
+          if (from < 2) {
+            await m.addColumn(mediaItemRows, mediaItemRows.thumbPath);
+          }
         },
         beforeOpen: (details) async {
           // 打开时启用外键级联（SQLite 默认关闭）。

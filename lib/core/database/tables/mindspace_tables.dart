@@ -55,6 +55,7 @@ class MediaItemRows extends Table {
   IntColumn get width => integer().nullable()();
   IntColumn get height => integer().nullable()();
   IntColumn get duration => integer().nullable()();
+  TextColumn get thumbPath => text().nullable()();
   IntColumn get createdAt => integer()();
 
   @override

@@ -70,11 +70,14 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
                   icon: Icon(Icons.palette_outlined,
                       color: memo.color != null ? Color(memo.color!) : null),
                   onPressed: () async {
-                    final c = await ColorPickerSheet.show(context,
+                    final r = await ColorPickerSheet.show(context,
                         current: memo.color);
-                    await ref
-                        .read(textEditorProvider(widget.memoId).notifier)
-                        .setColor(c);
+                    // 取消（null）不变更；“清除颜色”与选色都落入 setColor。
+                    if (r != null) {
+                      await ref
+                          .read(textEditorProvider(widget.memoId).notifier)
+                          .setColor(r.value);
+                    }
                   },
                 ),
                 IconButton(
@@ -117,20 +120,28 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
             body: Column(
               children: [
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Screenshot(
-                      controller: _shot,
-                      child: ColoredBox(
-                        color: Theme.of(context).colorScheme.surface,
-                        child: QuillEditor.basic(
-                          focusNode: _focus,
-                          controller: data.controller,
-                          config: QuillEditorConfig(
-                            expands: true,
-                            placeholder: '开始书写…',
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            customStyles: _styles(data.fontFamily),
+                  child: Center(
+                    // 横屏平板等宽屏下限制正文宽度并居中，避免行长过长影响阅读；
+                    // 1:1 小屏/竖屏手机时自动占满可用宽度。
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 840),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Screenshot(
+                          controller: _shot,
+                          child: ColoredBox(
+                            color: Theme.of(context).colorScheme.surface,
+                            child: QuillEditor.basic(
+                              focusNode: _focus,
+                              controller: data.controller,
+                              config: QuillEditorConfig(
+                                expands: true,
+                                placeholder: '开始书写…',
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                customStyles: _styles(context, data.fontFamily),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -150,9 +161,16 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     );
   }
 
-  DefaultStyles? _styles(String? family) {
+  DefaultStyles? _styles(BuildContext context, String? family) {
     if (family == null) return null;
-    final base = TextStyle(fontFamily: family, fontSize: 16, height: 1.5);
+    // 自定义样式会整体替换默认段落样式，必须显式保留主题前景色，
+    // 否则浅色模式下文字会退化为未着色（发白）。
+    final base = TextStyle(
+      fontFamily: family,
+      fontSize: 16,
+      height: 1.5,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
     return DefaultStyles(
       paragraph: DefaultTextBlockStyle(
         base,
@@ -165,9 +183,15 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
   }
 
   Future<void> _textColor(TextEditorData data) async {
-    final c = await ColorPickerSheet.show(context);
-    if (c == null) return;
-    final hex = '#${(c & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+    final r = await ColorPickerSheet.show(context);
+    // 取消（null）不做任何处理。
+    if (r == null) return;
+    if (r.cleared) {
+      // “清除颜色”：移除选中区域上的 color 属性。
+      data.controller.formatSelection(Attribute.clone(Attribute.color, null));
+      return;
+    }
+    final hex = '#${(r.value! & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
     data.controller.formatSelection(ColorAttribute(hex));
   }
 
@@ -219,8 +243,9 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
       case 'share_image':
         await _save();
         final bytes = await _shot.capture(pixelRatio: 2);
-        if (bytes != null)
+        if (bytes != null) {
           share.shareBytes(bytes, fileName: '${data.memo.id}.png');
+        }
     }
   }
 }

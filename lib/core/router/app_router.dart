@@ -19,9 +19,13 @@ import '../../features/settings/storage_settings_page.dart';
 import '../../features/settings/theme_settings_page.dart';
 import '../../features/share/share_image_page.dart';
 
+/// 全局路由观察者：供页面感知返回（如主页收起搜索框）。
+final rootRouteObserver = RouteObserver<ModalRoute<dynamic>>();
+
 /// 全局路由表（需求第 9 节）。
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    observers: [rootRouteObserver],
     initialLocation: '/',
     routes: [
       GoRoute(

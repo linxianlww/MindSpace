@@ -84,22 +84,44 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
               ),
             ],
           ),
-          body: PageView.builder(
-            controller: _page,
-            itemCount: items.length,
-            onPageChanged: (i) => setState(() => _index = i),
-            itemBuilder: (_, i) {
-              final it = items[i];
-              return it.kind == MediaKind.image
-                  ? PhotoView(
-                      imageProvider: FileImage(File(it.path)),
-                      minScale: PhotoViewComputedScale.contained,
-                      maxScale: PhotoViewComputedScale.covered * 4,
-                      backgroundDecoration:
-                          const BoxDecoration(color: Colors.black),
-                    )
-                  : _VideoPlayer(path: it.path);
-            },
+          body: Column(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _page,
+                  itemCount: items.length,
+                  onPageChanged: (i) => setState(() => _index = i),
+                  itemBuilder: (_, i) {
+                    final it = items[i];
+                    return it.kind == MediaKind.image
+                        ? PhotoView(
+                            imageProvider: FileImage(File(it.path)),
+                            minScale: PhotoViewComputedScale.contained,
+                            maxScale: PhotoViewComputedScale.covered * 4,
+                            backgroundDecoration:
+                                const BoxDecoration(color: Colors.black),
+                          )
+                        : _VideoPlayer(path: it.path);
+                  },
+                ),
+              ),
+              // 备注标签展示在图片查看页下方。
+              if ((item.remark ?? '').isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  color: Colors.black54,
+                  padding: EdgeInsets.only(
+                    left: 16,
+                    right: 16,
+                    top: 10,
+                    bottom: 10 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  child: Text(
+                    item.remark!,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+            ],
           ),
         );
       },

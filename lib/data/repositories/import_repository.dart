@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../core/constants/file_types.dart';
 import '../../core/storage/import_service.dart';
 import '../../core/storage/mindspace_storage.dart';
+import '../../core/utils/audio_probe.dart';
 import '../../core/utils/ms_date_utils.dart';
 import '../../core/utils/uuid_utils.dart';
 import '../datasources/file_system_datasource.dart';
@@ -45,6 +46,9 @@ class ImportRepository {
   Future<Memo> importOne(String path, {String? folderId}) =>
       _importSingle(path, folderId);
 
+  /// 用 just_audio 临时加载一次音频文件，探测真实时长（毫秒）。
+  Future<int> _probeAudioDuration(String path) => probeAudioDuration(path);
+
   // —— 单文件：文本 / 音频 / 文件 ——
   Future<Memo> _importSingle(String source, String? folderId) async {
     final type = FileTypes.classify(source);
@@ -80,7 +84,11 @@ class ImportRepository {
         await _memos.save(memo.copyWith(
           metadata: {
             'originalPath': placed,
+            // 补存文件名供展示（不暴露内部完整路径）。
+            'originalName': p.basename(source),
             'ext': FileTypes.extensionOf(source),
+            // 导入时即解码一次时长，否则列表与信息页显示 00:00。
+            'durationMs': await _probeAudioDuration(placed),
           },
         ));
 
@@ -129,7 +137,7 @@ class ImportRepository {
       int? h;
       String? thumb;
       if (kind == MediaKind.image) {
-        final size = _service.readImageSize(placed);
+        final size = await _service.readImageSize(placed);
         w = size?.width;
         h = size?.height;
         thumb = await _service.generateImageThumb(placed, memo.id);

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
+import '../../../core/storage/mindspace_storage.dart';
 import '../../../core/theme/md3e_tokens.dart';
 import '../../../core/utils/ms_date_utils.dart';
 import '../../../data/models/folder.dart';
 import '../../../data/models/memo.dart';
 import '../../../data/models/memo_type.dart';
+import '../home_provider.dart';
 import '../../share/share_service.dart';
 
 /// 长按铭记卡片弹出的操作表。
@@ -102,6 +104,9 @@ class MemoActions {
     );
     if (result != null && result.isNotEmpty && result != memo.title) {
       await ref.read(memoRepositoryProvider).rename(memo.id, result);
+      // 详情 provider 是普通 FutureProvider 非流式，改名后必须显式失效，
+      // 否则详情页/音频页标题仍显示旧名称。
+      ref.invalidate(memoDetailProvider(memo.id));
     }
   }
 
@@ -143,26 +148,30 @@ class MemoActions {
     );
   }
 
+  /// 防越权：仅分享应用私有目录内的文件，避免被篡改的 meta 路径外泄任意文件。
+  static bool _safeShareable(String? path) =>
+      path != null && MindspaceStorage.instance.isWithinSupport(path);
+
   static Future<void> share(
       BuildContext context, WidgetRef ref, Memo memo) async {
     final share = ref.read(shareServiceProvider);
     switch (memo.type) {
       case MemoType.text:
         final path = memo.metadata['filePath'] as String?;
-        if (path != null) {
-          await share.shareFile(path, text: memo.title);
+        if (_safeShareable(path)) {
+          await share.shareFile(path!, text: memo.title);
         } else {
           await share.shareText(memo.title);
         }
       case MemoType.audio:
         final p = memo.metadata['originalPath'] as String? ??
             memo.metadata['trimmedPath'] as String?;
-        if (p != null) await share.shareFile(p);
+        if (_safeShareable(p)) await share.shareFile(p!);
       case MemoType.file:
       case MemoType.media:
         final p = memo.metadata['path'] as String?;
-        if (p != null) {
-          await share.shareFile(p);
+        if (_safeShareable(p)) {
+          await share.shareFile(p!);
         } else if (memo.type == MemoType.media) {
           // 媒体集：把当前条目交给媒体页打包，这里分享标题兜底。
           final items = await ref.read(memoRepositoryProvider).mediaOf(memo.id);

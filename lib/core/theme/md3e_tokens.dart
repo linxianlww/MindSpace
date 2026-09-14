@@ -36,8 +36,10 @@ class Md3eTokens {
   static const Curve standard = Curves.easeOutCubic;
 
   // —— 瀑布流 ——
-  /// 依据宽度决定列数：手机双列，平板/折叠屏更多列。
+  /// 依据宽度决定列数，覆盖 1:1 小屏与横屏平板等极端比例：
+  /// 至少 2 列（保证小屏可读性），横屏平板 3~5 列。
   static int masonryColumns(double width) {
+    if (width >= 1600) return 5;
     if (width >= 1200) return 4;
     if (width >= 800) return 3;
     return 2;

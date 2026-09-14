@@ -52,7 +52,7 @@ class FileInfoCard extends StatelessWidget {
               ],
             ),
             const Divider(height: 24),
-            _row(context, '路径', path),
+            // 隐私考虑：不展示应用内部完整路径，仅显示文件名/大小/修改时间。
             if (modified != null) _row(context, '修改时间', modified.toString()),
           ],
         ),

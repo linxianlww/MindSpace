@@ -49,6 +49,20 @@ class MindspaceStorage {
     if (!dir.existsSync()) dir.createSync(recursive: true);
   }
 
+  /// 判断 [path] 是否位于应用私有 supportDir 之内。
+  ///
+  /// 用于防越权：meta.json / 备份数据可能被篡改，读取、分享、导入前
+  /// 校验路径归属，避免把系统任意路径的文件读入应用或分享出去。
+  bool isWithinSupport(String path) {
+    try {
+      final root = p.normalize(supportDir.path);
+      final target = p.normalize(path);
+      return target == root || target.startsWith(root + p.separator);
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// 某个铭记所在目录（根铭记或文件夹铭记）。
   String memoDir({required String memoId, String? folderId}) {
     if (folderId == null) {

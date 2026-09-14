@@ -18,6 +18,8 @@ class FontPicker extends ConsumerWidget {
       required void Function(FontAsset? font) onPicked}) {
     return showModalBottomSheet(
       context: context,
+      // 横屏下内容可能超出默认高度，允许占满全屏并内部滚动。
+      isScrollControlled: true,
       builder: (_) =>
           FontPicker(currentFontId: currentFontId, onPicked: onPicked),
     );
@@ -44,9 +46,10 @@ class FontPicker extends ConsumerWidget {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             ListTile(
               leading: const Icon(Icons.font_download_off_outlined),
               title: const Text('默认字体'),
@@ -100,7 +103,8 @@ class FontPicker extends ConsumerWidget {
                 label: const Text('从文件导入字体 (.ttf/.otf)'),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

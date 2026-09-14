@@ -16,25 +16,31 @@ class MediaThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final imgPath = item.thumbPath ?? item.path;
+    final thumbExists =
+        item.thumbPath != null && File(item.thumbPath!).existsSync();
     Widget content;
-    if (item.kind == MediaKind.image && File(imgPath).existsSync()) {
-      content = Image.file(File(imgPath), fit: BoxFit.cover, width: double.infinity);
+    if (item.kind == MediaKind.image) {
+      // 图片：优先缩略图；缩略图缺失（如缓存被清除）时回退原图，避免
+      // 在图片上错误呈现播放按钮。
+      final imagePath = thumbExists ? item.thumbPath! : item.path;
+      if (File(imagePath).existsSync()) {
+        content = Image.file(File(imagePath),
+            fit: BoxFit.cover, width: double.infinity);
+      } else {
+        content = _placeholder(
+          context,
+          icon: Icons.broken_image_outlined,
+          caption: null,
+        );
+      }
     } else {
-      content = Container(
-        color: scheme.surfaceContainerHighest,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.play_circle_fill_rounded,
-                size: 36, color: scheme.primary),
-            if (item.durationMs != null)
-              Text(MsDateUtils.formatDuration(item.durationMs!),
-                  style: Theme.of(context).textTheme.labelSmall),
-          ],
-        ),
+      // 视频：播放占位 + 时长，右上角再叠加摄像头角标。
+      content = _placeholder(
+        context,
+        icon: Icons.play_circle_fill_rounded,
+        caption: item.durationMs != null
+            ? MsDateUtils.formatDuration(item.durationMs!)
+            : null,
       );
     }
 
@@ -69,6 +75,25 @@ class MediaThumb extends StatelessWidget {
             child: Icon(Icons.videocam_rounded, color: Colors.white70, size: 20),
           ),
       ],
+    );
+  }
+
+  Widget _placeholder(
+    BuildContext context, {
+    required IconData icon,
+    required String? caption,
+  }) {
+    final theme = Theme.of(context);
+    return Container(
+      color: theme.colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 36, color: theme.colorScheme.primary),
+          if (caption != null) Text(caption, style: theme.textTheme.labelSmall),
+        ],
+      ),
     );
   }
 }

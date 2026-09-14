@@ -99,9 +99,12 @@ class _WavePainter extends CustomPainter {
     final samples = _resample(count);
     final paint = Paint()..strokeWidth = barWidth;
     final mid = size.height / 2;
+    // 按峰值归一化：兼容 0..255 与 0..1000 等不同刻度，
+    // 否则所有柱子会被 clamp 到同一高度（等高波形）。
+    final peak = samples.fold<int>(1, (m, v) => v > m ? v : m);
     for (var i = 0; i < samples.length; i++) {
       final dx = i * (barWidth + gap);
-      final norm = (samples[i] / 255).clamp(0.05, 1.0);
+      final norm = (samples[i] / peak).clamp(0.05, 1.0);
       final h = norm * size.height * 0.9;
       paint.color = (i / samples.length) <= progress ? played : unplayed;
       canvas.drawLine(

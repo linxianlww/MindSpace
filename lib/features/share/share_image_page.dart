@@ -51,9 +51,19 @@ class _ShareImagePageState extends ConsumerState<ShareImagePage> {
                 child: Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: Screenshot(
-                      controller: _controller,
-                      child: _ShareCard(memo: memo),
+                    // 卡片宽度随可用空间自适应（180~360），
+                    // 避免 1:1 小屏上固定 360 宽溢出屏幕。
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final w = constraints.maxWidth.clamp(180.0, 360.0);
+                        return SizedBox(
+                          width: w,
+                          child: Screenshot(
+                            controller: _controller,
+                            child: _ShareCard(memo: memo),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -123,12 +133,9 @@ class _ShareCard extends StatelessWidget {
                 maxLines: 8,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    fontSize: 15,
-                    height: 1.6,
-                    color: scheme.onSurfaceVariant)),
+                    fontSize: 15, height: 1.6, color: scheme.onSurfaceVariant)),
           const SizedBox(height: 24),
-          Text('${memo.type.label}铭记',
-              style: TextStyle(color: scheme.primary)),
+          Text('${memo.type.label}铭记', style: TextStyle(color: scheme.primary)),
         ],
       ),
     );

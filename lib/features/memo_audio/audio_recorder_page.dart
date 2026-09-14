@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../core/storage/mindspace_storage.dart';
+import '../../../core/utils/audio_probe.dart';
 import '../../../core/utils/ms_date_utils.dart';
 import '../home/home_provider.dart';
 import 'audio_provider.dart';
@@ -31,6 +32,8 @@ class _AudioRecorderPageState extends ConsumerState<AudioRecorderPage> {
   }
 
   Future<bool> _requestMic() async {
+    // permission_handler 会等到用户对权限弹窗作出选择；
+    // 仅靠插件的 checkPermission 在首次授权时可能拿到未决结果。
     final status = await Permission.microphone.request();
     return status.isGranted;
   }
@@ -107,9 +110,16 @@ class _AudioRecorderPageState extends ConsumerState<AudioRecorderPage> {
                       FloatingActionButton(
                         heroTag: 'resume',
                         onPressed: () async {
+                          final messenger = ScaffoldMessenger.of(context);
                           await _ensurePath(memo.folderId);
                           if (_targetPath != null) {
-                            notifier.resume(_targetPath!);
+                            final ok = await notifier.resume(_targetPath!);
+                            if (!ok) {
+                              messenger.showSnackBar(
+                                const SnackBar(
+                                    content: Text('需要麦克风权限才能录音')),
+                              );
+                            }
                           }
                         },
                         child: const Icon(Icons.mic),
@@ -150,7 +160,21 @@ class _AudioRecorderPageState extends ConsumerState<AudioRecorderPage> {
           return;
         }
         await _ensurePath(folderId);
-        if (_targetPath != null) n.start(_targetPath!);
+        if (_targetPath == null) return;
+        try {
+          final started = await n.start(_targetPath!);
+          if (!started && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('需要麦克风权限才能录音')),
+            );
+          }
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('录音启动失败，请重试')),
+            );
+          }
+        }
       },
       child: const Icon(Icons.fiber_manual_record),
     );
@@ -158,20 +182,36 @@ class _AudioRecorderPageState extends ConsumerState<AudioRecorderPage> {
 
   Future<void> _stop(AudioRecorderNotifier n) async {
     final result = await n.stop();
+    // 录音失败（插件返回空路径）时不再用目标路径兑底：否则会把一个
+    // 不存在的文件写进元数据，导致后续播放/导入完全无效。
+    final savedPath = result.path;
+    if (savedPath == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('录音保存失败，请重试')),
+        );
+      }
+      return;
+    }
     final memo =
         await ref.read(memoRepositoryProvider).findById(widget.memoId);
     if (memo == null) return;
+    // 用解码器校准真实时长：计时器可能因编码开销存在误差，避免信息页
+    // 显示 00:00 或与播放实际长度不一致。probe 失败时回退计时值。
+    final probed = await probeAudioDuration(savedPath);
     await ref.read(memoRepositoryProvider).save(memo.copyWith(
       title: memo.title == '新录音'
           ? '录音 ${MsDateUtils.format(memo.createdAt)}'
           : memo.title,
       metadata: {
         ...memo.metadata,
-        'originalPath': result.path ?? _targetPath,
+        'originalPath': savedPath,
         'waveform': result.wave,
-        'durationMs': n.elapsedMs,
+        'durationMs': probed > 0 ? probed : result.elapsedMs,
       },
     ));
+    // 刷新详情缓存，避免播放页读到录音前的旧元数据（表现为“没有音频”）。
+    ref.invalidate(memoDetailProvider(widget.memoId));
     if (mounted) {
       context.pushReplacement('/memo/audio/${widget.memoId}');
     }

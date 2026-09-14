@@ -16,8 +16,12 @@ android {
 
     defaultConfig {
         applicationId = "com.aria.mindspace"
-        // 录音(record)、PDF(pdfrx) 等插件要求最低 API 23，统一提升到 23。
-        minSdk = flutter.minSdkVersion
+        // 【兼容性】minSdk = 26（Android 8.0）：
+        // ① 产品要求支持 Android 8.x；
+        // ② java.time 自 API 26 起为系统原生 API，避免依赖任何需 desugar 的路径；
+        // ③ 所有插件 minSdk 均 ≤21，上提无冲突。
+        // 注意：不使用 flutter.minSdkVersion（24），显式固定。
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

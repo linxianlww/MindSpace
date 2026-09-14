@@ -42,6 +42,25 @@ class TextEditorData {
 
 class TextEditorNotifier
     extends FamilyAsyncNotifier<TextEditorData, String> {
+  /// 结构校验的文档构建：delta 可能来自被篡改/损坏的文件，逐项检查
+  /// 操作是否为 {insert/retain/delete} 对象，非法时回退为空文档，
+  /// 避免构建期抛未捕获异常导致整个编辑器进入错误态。
+  static Document _safeDocument(List<dynamic> ops) {
+    try {
+      final valid = ops.every((op) =>
+          op is Map<String, dynamic> &&
+          (op.containsKey('insert') ||
+              op.containsKey('retain') ||
+              op.containsKey('delete')));
+      if (!valid) return _emptyDocument();
+      return Document.fromJson(ops);
+    } catch (_) {
+      return _emptyDocument();
+    }
+  }
+
+  static Document _emptyDocument() => Document()..insert(0, '\n');
+
   @override
   Future<TextEditorData> build(String memoId) async {
     final memoRepo = ref.read(memoRepositoryProvider);
@@ -59,12 +78,19 @@ class TextEditorNotifier
     if (fs.exists(deltaPath)) {
       try {
         final raw = await fs.readString(deltaPath);
-        ops = jsonDecode(raw) as List<dynamic>;
+        final decoded = jsonDecode(raw);
+        if (decoded is List<dynamic>) {
+          ops = decoded;
+        }
       } catch (_) {/* 损坏则退回空文档 */}
     } else {
       // 导入的 txt/md/rtf：以纯文本初始化一次。
       final imported = memo.metadata['filePath'] as String?;
-      if (imported != null && fs.exists(imported)) {
+      // 防越权：只读取应用私有目录内的文件，避免被篡改的 meta 指向
+      // 系统任意路径后泄露内容。
+      if (imported != null &&
+          storage.isWithinSupport(imported) &&
+          fs.exists(imported)) {
         final text = await fs.readString(imported);
         ops = [
           {'insert': '$text\n'}
@@ -73,7 +99,7 @@ class TextEditorNotifier
     }
 
     final controller = QuillController(
-      document: Document.fromJson(ops),
+      document: _safeDocument(ops),
       selection: const TextSelection.collapsed(offset: 0),
     );
     ref.onDispose(controller.dispose);

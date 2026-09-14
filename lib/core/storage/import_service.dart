@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
@@ -40,12 +41,16 @@ class ImportService {
   }
 
   /// 读取图片尺寸（宽、高）。失败返回 null，不阻断导入。
-  ({int width, int height})? readImageSize(String path) {
+  ///
+  /// 解码在独立 isolate 中进行，避免大图阻塞 UI 线程。
+  Future<({int width, int height})?> readImageSize(String path) async {
     try {
-      final bytes = File(path).readAsBytesSync();
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return null;
-      return (width: decoded.width, height: decoded.height);
+      return await Isolate.run(() {
+        final bytes = File(path).readAsBytesSync();
+        final decoded = img.decodeImage(bytes);
+        if (decoded == null) return null;
+        return (width: decoded.width, height: decoded.height);
+      });
     } catch (e) {
       appLogger.w('读取图片尺寸失败 $path', e);
       return null;
@@ -76,7 +81,8 @@ class ImportService {
 
   /// 使用 Isolate 解码大图，避免阻塞 UI。
   Future<img.Image?> _decodeAsync(Uint8List bytes) {
-    return Future(() => img.decodeImage(bytes));
+    // 注意：必须是真正的独立 isolate，Future(...) 仍在主 isolate 执行。
+    return Isolate.run(() => img.decodeImage(bytes));
   }
 }
 

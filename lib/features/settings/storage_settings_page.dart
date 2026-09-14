@@ -5,6 +5,7 @@ import '../../core/di/providers.dart';
 import '../../core/storage/mindspace_storage.dart';
 import '../../core/utils/file_utils.dart';
 import '../home/home_provider.dart';
+import '../memo_media/media_provider.dart';
 
 /// 存储管理：占用统计、清理缩略图缓存、回收站管理。
 class StorageSettingsPage extends ConsumerStatefulWidget {
@@ -39,6 +40,12 @@ class _StorageSettingsPageState extends ConsumerState<StorageSettingsPage> {
       await dir.delete(recursive: true);
       dir.createSync(recursive: true);
     }
+    // 清理 Flutter 图片内存缓存，避免旧的缩略图继续被展示。
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    // 自愈：重新生成缺失的缩略图并回写 DB（主页/媒体集随之通过
+    // 数据流自动刷新，无需额外 invalidate）。
+    await ref.read(mediaControllerProvider).repairThumbnails();
     _refresh();
   }
 

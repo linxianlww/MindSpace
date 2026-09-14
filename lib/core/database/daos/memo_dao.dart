@@ -53,6 +53,11 @@ class MemoDao extends DatabaseAccessor<AppDatabase> with _$MemoDaoMixin {
     return q.watch();
   }
 
+  /// 某类型下所有未删除铭记（用于补充扫描文件系统中的正文内容）。
+  Future<List<MemoRow>> activeOfType(String type) =>
+      (select(memoRows)..where((t) =>
+          t.deletedAt.isNull() & t.type.equals(type))).get();
+
   Future<MemoRow?> getById(String id) =>
       (select(memoRows)..where((t) => t.id.equals(id))).getSingleOrNull();
 

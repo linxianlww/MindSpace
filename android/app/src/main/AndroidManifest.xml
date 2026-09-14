@@ -6,7 +6,11 @@
     <application
         android:label="MindSpace"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true">
+        <!-- largeHeap：Android 8.x 低配机位图/GL 内存预算紧张，大图查看、
+             PDF 渲染、图片旋转/裁剪等重任务需要更多堆空间，否则直接 OOM 崩溃。 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -28,6 +32,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- image_cropper (uCrop) 必需：缺失时点击裁剪会 ActivityNotFound 崩溃。 -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Ucrop.CropTheme"/>
     </application>
 
     <!-- Android 11+ 包可见性：open_filex / url_launcher / share 需要查询可处理的目标应用。 -->

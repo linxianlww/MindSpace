@@ -5,7 +5,10 @@ import '../../../core/theme/md3e_tokens.dart';
 /// 新建目标类型。
 enum CreateTarget { text, media, audio, file, folder }
 
-/// MD3E 展开式 FAB：点击后以弹性曲线展开五个新建入口。
+/// MD3E 展开式 FAB：点击后以弹性曲线在主按钮上方（屏幕右侧）展开新建入口。
+///
+/// 采用 Stack 以主按钮为锚点向上展开，保证展开项始终贴着主按钮上方、
+/// 与主按钮右对齐，而不会因 Column 宽度变化被挤到屏幕左侧。
 class CreateFab extends StatefulWidget {
   const CreateFab({super.key, required this.onSelect});
 
@@ -35,6 +38,15 @@ class _CreateFabState extends State<CreateFab>
   }
 
   @override
+  void initState() {
+    super.initState();
+    // 收起动画结束后把展开项从树中移除，避免空占位影响 FAB 宽度。
+    _ctrl.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && mounted) setState(() {});
+    });
+  }
+
+  @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
@@ -42,28 +54,38 @@ class _CreateFabState extends State<CreateFab>
 
   @override
   Widget build(BuildContext context) {
+    final expandedVisible = _open || _ctrl.isAnimating;
+    final fab = FloatingActionButton.extended(
+      onPressed: _toggle,
+      icon: AnimatedRotation(
+        turns: _open ? 0.125 : 0,
+        duration: Md3eTokens.medium,
+        curve: Md3eTokens.emphasized,
+        child: Icon(_open ? Icons.close : Icons.add),
+      ),
+      label: Text(_open ? '收起' : '新建'),
+    );
+    // 展开项与主按钮放在同一个 Column 中、整体右对齐：展开项天然位于
+    // 主按钮正上方且右缘与按钮对齐（无 x 轴位移），收起后仅剩主按钮。
+    if (!expandedVisible) return fab;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         for (var i = 0; i < _items.length; i++)
           ScaleTransition(
-            scale: CurvedAnimation(parent: _ctrl, curve: Md3eTokens.emphasized),
+            alignment: Alignment.centerRight,
+            scale: CurvedAnimation(
+                parent: _ctrl, curve: Md3eTokens.emphasized),
             child: SizeTransition(
-              sizeFactor: CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+              sizeFactor: CurvedAnimation(
+                  parent: _ctrl, curve: Curves.easeOut),
+              alignment: Alignment.bottomCenter,
               child: _miniItem(context, _items[i]),
             ),
           ),
-        FloatingActionButton.extended(
-          onPressed: _toggle,
-          icon: AnimatedRotation(
-            turns: _open ? 0.125 : 0,
-            duration: Md3eTokens.medium,
-            curve: Md3eTokens.emphasized,
-            child: Icon(_open ? Icons.close : Icons.add),
-          ),
-          label: Text(_open ? '收起' : '新建'),
-        ),
+        const SizedBox(height: 6),
+        fab,
       ],
     );
   }

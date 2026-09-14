@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -53,7 +54,7 @@ class MediaController {
       int? h;
       String? thumb;
       if (kind == MediaKind.image) {
-        final size = service.readImageSize(placed);
+        final size = await service.readImageSize(placed);
         w = size?.width;
         h = size?.height;
         thumb = await service.generateImageThumb(placed, memoId);
@@ -91,6 +92,9 @@ class MediaController {
     final moved = list.removeAt(from);
     list.insert(to, moved);
     await _ref.read(memoRepositoryProvider).reorderMedia(memoId, list);
+    // 排序后首张图片可能变化，同步刷新 memo.thumbnailPath，否则主页
+    // 瀑布流缩略图停留在排序前的旧图（重启后依旧，因 DB 中值已过期）。
+    await _refreshCount(memoId);
   }
 
   Future<void> setRemark(MediaItem item, String? remark) async {
@@ -101,18 +105,29 @@ class MediaController {
 
   /// 顺时针旋转 90°（仅图片），覆盖原文件并刷新缩略信息。
   Future<void> rotateRight(MediaItem item) async {
-    final bytes = await File(item.path).readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return;
-    final rotated = img.copyRotate(decoded, angle: 90);
     final ext = FileTypes.extensionOf(item.path);
-    final encoded = ext == 'png'
-        ? img.encodePng(rotated)
-        : img.encodeJpg(rotated, quality: 92);
-    await File(item.path).writeAsBytes(encoded, flush: true);
+    final path = item.path;
+    // 解码 + 逐像素旋转 + 编码非常耗时，必须在独立 isolate 中执行，
+    // 否则大图会卡死 UI 线程（ANR）。尺寸也一并算好带回，避免二次解码。
+    final result = await Isolate.run(() async {
+      final bytes = await File(path).readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return null;
+      final rotated = img.copyRotate(decoded, angle: 90);
+      final encoded = ext == 'png'
+          ? img.encodePng(rotated)
+          : img.encodeJpg(rotated, quality: 92);
+      return (encoded: encoded, width: rotated.width, height: rotated.height);
+    });
+    if (result == null) return; // 无法解码（如 HEIC），保持原样。
+    await File(path).writeAsBytes(result.encoded, flush: true);
+    final thumb = await _ref
+        .read(importServiceProvider)
+        .generateImageThumb(path, item.memoId);
     await _ref.read(memoRepositoryProvider).upsertMedia(item.copyWith(
-          width: rotated.width,
-          height: rotated.height,
+          width: result.width,
+          height: result.height,
+          thumbPath: thumb,
         ));
   }
 
@@ -133,7 +148,7 @@ class MediaController {
     final bytes = await cropped.readAsBytes();
     await File(item.path).writeAsBytes(bytes, flush: true);
     final service = _ref.read(importServiceProvider);
-    final size = service.readImageSize(item.path);
+    final size = await service.readImageSize(item.path);
     final thumb = await service.generateImageThumb(item.path, item.memoId);
     await _ref.read(memoRepositoryProvider).upsertMedia(item.copyWith(
           width: size?.width,
@@ -161,6 +176,47 @@ class MediaController {
         metadata: {...memo.metadata, 'count': items.length},
       ));
     }
+  }
+
+  /// 修复缺失的缩略图：扫描全部媒体集，凡“图片条目”的缩略图文件缺失时
+  /// 重新生成并写库（含 memo.thumbnailPath），供“清除缩略图缓存”和
+  /// 应用启动时调用，实现缩略图自愈。
+  Future<int> repairThumbnails() async {
+    final repo = _ref.read(memoRepositoryProvider);
+    final service = _ref.read(importServiceProvider);
+    var repaired = 0;
+    final memoThumbDirty = <String>{};
+    try {
+      final mediaMemos = await repo.activeByType(MemoType.media);
+      for (final memo in mediaMemos) {
+        final items = await repo.mediaOf(memo.id);
+        var dirty = false;
+        for (final item in items) {
+          if (item.kind != MediaKind.image) continue;
+          final ok = item.thumbPath != null && File(item.thumbPath!).existsSync();
+          if (ok || !File(item.path).existsSync()) continue;
+          final thumb = await service.generateImageThumb(item.path, item.memoId);
+          if (thumb != null) {
+            await repo.upsertMedia(item.copyWith(thumbPath: thumb));
+            repaired++;
+            dirty = true;
+          }
+        }
+        // 首图即封面：封面缩略图也缺失时一并刷新。
+        if (memo.thumbnailPath == null ||
+            !File(memo.thumbnailPath!).existsSync()) {
+          memoThumbDirty.add(memo.id);
+        }
+        if (dirty) memoThumbDirty.add(memo.id);
+      }
+      // 集中刷新封面（thumbnailPath 指向新生成的首图缩略图）。
+      for (final id in memoThumbDirty) {
+        await _refreshCount(id);
+      }
+    } catch (e) {
+      // 单项失败不阻断整体修复。
+    }
+    return repaired;
   }
 
   /// 打包全部媒体路径，供分享。

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
 import '../../core/storage/mindspace_storage.dart';
@@ -33,10 +34,47 @@ class MemoRepository {
         .map((rows) => rows.map(Mappers.memoRow).toList());
   }
 
-  Stream<List<Memo>> watchSearch(String keyword) =>
-      _db.memos.watchSearch(keyword).map(
-            (rows) => rows.map(Mappers.memoRow).toList(),
-          );
+  Stream<List<Memo>> watchSearch(String keyword) {
+    final kw = keyword.trim();
+    return _db.memos.watchSearch(kw).asyncMap((rows) async {
+      final found = <String, Memo>{
+        for (final r in rows) r.id: Mappers.memoRow(r),
+      };
+      // 文本型铭记的正文存于磁盘（content.md / content.txt），不在数据库
+      // 列中，这里补充扫描正文内容，保证全文搜索能命中正文。
+      final textRows =
+          await _db.memos.activeOfType(MemoType.text.wire);
+      for (final r in textRows) {
+        if (found.containsKey(r.id)) continue;
+        final memo = Mappers.memoRow(r);
+        final content = await _textContent(memo);
+        if (content.toLowerCase().contains(kw.toLowerCase())) {
+          found[memo.id] = memo;
+        }
+      }
+      final list = found.values.toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      return list;
+    });
+  }
+
+  /// 读取文本型铭记的正文（优先 content.md，其次 content.txt，最后摘要）。
+  Future<String> _textContent(Memo memo) async {
+    final dir = MindspaceStorage.instance
+        .memoDir(memoId: memo.id, folderId: memo.folderId);
+    for (final name in const ['content.md', 'content.txt']) {
+      final path = p.join(dir, name);
+      if (_fs.exists(path)) {
+        try {
+          return await _fs.readString(path);
+        } catch (_) {
+          // 读取失败则尝试下一个文件。
+        }
+      }
+    }
+    final excerpt = memo.metadata['excerpt'];
+    return excerpt is String ? excerpt : '';
+  }
 
   Stream<List<Memo>> watchTrash() => _db.memos
       .watchTrash()
@@ -45,6 +83,12 @@ class MemoRepository {
   Future<Memo?> findById(String id) async {
     final row = await _db.memos.getById(id);
     return row == null ? null : Mappers.memoRow(row);
+  }
+
+  /// 某类型下所有未删除铭记（如扫描媒体集缩略图时使用）。
+  Future<List<Memo>> activeByType(MemoType type) async {
+    final rows = await _db.memos.activeOfType(type.wire);
+    return rows.map(Mappers.memoRow).toList();
   }
 
   // —————— 创建 / 保存 ——————

@@ -96,6 +96,7 @@ class Mappers {
         width: r.width,
         height: r.height,
         durationMs: r.duration,
+        thumbPath: r.thumbPath,
         createdAt: r.createdAt,
       );
 
@@ -110,6 +111,7 @@ class Mappers {
         width: Value(i.width),
         height: Value(i.height),
         duration: Value(i.durationMs),
+        thumbPath: Value(i.thumbPath),
         createdAt: i.createdAt,
       );
 

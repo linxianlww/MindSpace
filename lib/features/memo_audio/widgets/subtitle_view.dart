@@ -21,7 +21,13 @@ class SubtitleView extends StatefulWidget {
 
 class _SubtitleViewState extends State<SubtitleView> {
   final _scroll = ScrollController();
-  final _keys = <int, GlobalKey>{};
+
+  /// item 构建时登记其 BuildContext，供自动滚动定位。
+  ///
+  /// 不能依赖 GlobalKey：在 build 中每次 new GlobalKey 会在下一帧
+  /// 被卸载/重挂，postFrame 回调里取到的 key 没有 currentContext，
+  /// 导致 `Scrollable.ensureVisible` 静默失效（字幕从不自动滚动）。
+  final _ctxByIndex = <int, BuildContext?>{};
 
   @override
   void didUpdateWidget(covariant SubtitleView old) {
@@ -29,14 +35,14 @@ class _SubtitleViewState extends State<SubtitleView> {
     if (widget.activeIndex != old.activeIndex &&
         widget.activeIndex >= 0 &&
         widget.activeIndex < widget.subs.length) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _ensureVisible());
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _ensureVisible(widget.activeIndex));
     }
   }
 
-  void _ensureVisible() {
-    final key = _keys[widget.activeIndex];
-    final ctx = key?.currentContext;
-    if (ctx != null) {
+  void _ensureVisible(int index) {
+    final ctx = _ctxByIndex[index];
+    if (ctx != null && ctx.mounted) {
       Scrollable.ensureVisible(ctx,
           duration: const Duration(milliseconds: 280),
           alignment: 0.3,
@@ -63,9 +69,8 @@ class _SubtitleViewState extends State<SubtitleView> {
       itemBuilder: (context, i) {
         final s = widget.subs[i];
         final active = i == widget.activeIndex;
-        _keys[i] = GlobalKey();
+        _ctxByIndex[i] = context;
         return GestureDetector(
-          key: _keys[i],
           onTap: () => widget.onTap(i),
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),

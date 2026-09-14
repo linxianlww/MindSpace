@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/storage/mindspace_storage.dart';
 import '../../../core/widgets/state_views.dart';
 import '../share/share_service.dart';
 import 'text_provider.dart';
@@ -34,7 +36,11 @@ class TextViewerPage extends ConsumerWidget {
                     share.shareText(data.controller.document.toPlainText());
                   } else if (v == 'file') {
                     final p = data.memo.metadata['filePath'] as String?;
-                    if (p != null) share.shareFile(p);
+                    // 防越权：只分享应用私有目录内的文件。
+                    if (p != null &&
+                        MindspaceStorage.instance.isWithinSupport(p)) {
+                      share.shareFile(p);
+                    }
                   }
                 },
                 itemBuilder: (_) => const [
@@ -49,28 +55,19 @@ class TextViewerPage extends ConsumerWidget {
               ),
             ],
           ),
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: QuillEditor.basic(
-              controller: data.controller,
-              config: QuillEditorConfig(
-                expands: false,
-                padding: EdgeInsets.zero,
-                showCursor: false,
-                customStyles: data.fontFamily == null
-                    ? null
-                    : DefaultStyles(
-                        paragraph: DefaultTextBlockStyle(
-                          TextStyle(
-                              fontFamily: data.fontFamily,
-                              fontSize: 16,
-                              height: 1.5),
-                          const HorizontalSpacing(0, 0),
-                          const VerticalSpacing(0, 4),
-                          const VerticalSpacing(0, 0),
-                          null,
-                        ),
-                      ),
+          body: Center(
+            // 横屏平板等宽屏下限制正文宽度并居中，避免行长过长。
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 840),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                // 使用独立的只读渲染，而不是复用编辑器 provider 的同一个
+                // QuillController——否则查看页与编辑页两个 QuillEditor 同时
+                // 挂载到同一 controller 上，编辑页会因输入连接被占用而无法输入。
+                child: _ReadOnlyQuillView(
+                  delta: data.controller.document.toDelta().toJson(),
+                  fontFamily: data.fontFamily,
+                ),
               ),
             ),
           ),
@@ -81,6 +78,92 @@ class TextViewerPage extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 基于独立 controller 的只读富文本渲染。
+class _ReadOnlyQuillView extends StatefulWidget {
+  const _ReadOnlyQuillView({required this.delta, this.fontFamily});
+
+  final List<dynamic> delta;
+  final String? fontFamily;
+
+  @override
+  State<_ReadOnlyQuillView> createState() => _ReadOnlyQuillViewState();
+}
+
+class _ReadOnlyQuillViewState extends State<_ReadOnlyQuillView> {
+  late final QuillController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = QuillController(
+      document: Document.fromJson(widget.delta),
+      selection: const TextSelection.collapsed(offset: 0),
+      readOnly: true,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReadOnlyQuillView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 编辑器保存后共享 provider 的文档变化会以新 delta 触发本组件重建，
+    // 这里同步替换内部只读控制器，否则查看页永远停留在修改前的内容。
+    if (!listEquals(oldWidget.delta, widget.delta)) {
+      try {
+        final newDoc = Document.fromJson(widget.delta);
+        _controller.document.replace(
+          0,
+          _controller.document.length,
+          newDoc.toDelta(),
+        );
+        _controller.updateSelection(
+          const TextSelection.collapsed(offset: 0),
+          ChangeSource.local,
+        );
+      } catch (_) {/* delta 损坏则保持现状 */}
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return QuillEditor.basic(
+      controller: _controller,
+      config: QuillEditorConfig(
+        expands: false,
+        padding: EdgeInsets.zero,
+        showCursor: false,
+        customStyles: _styles(context, widget.fontFamily),
+      ),
+    );
+  }
+
+  DefaultStyles? _styles(BuildContext context, String? family) {
+    if (family == null) return null;
+    // 与编辑页一致：自定义样式必须显式带上主题前景色，
+    // 否则浅色模式下正文会意外变白。
+    final base = TextStyle(
+      fontFamily: family,
+      fontSize: 16,
+      height: 1.5,
+      color: Theme.of(context).colorScheme.onSurface,
+    );
+    return DefaultStyles(
+      paragraph: DefaultTextBlockStyle(
+        base,
+        const HorizontalSpacing(0, 0),
+        const VerticalSpacing(0, 4),
+        const VerticalSpacing(0, 0),
+        null,
+      ),
     );
   }
 }
