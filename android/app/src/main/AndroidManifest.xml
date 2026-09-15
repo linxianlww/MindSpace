@@ -1,14 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 仅在“音频铭记-录音”时动态申请；不申请存储根目录权限，媒体走系统 Photo Picker。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- TOTP 扫码导入（mobile_scanner）；仅在前台使用相机时动态申请。 -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- 纯本地优先应用，不需要联网权限。 -->
 
     <application
-        android:label="MindSpace"
+        android:label="NekoBox"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:hardwareAccelerated="true"
-        android:largeHeap="true">
+        android:largeHeap="true"
+        android:enableOnBackInvokedCallback="true">
         <!-- largeHeap：Android 8.x 低配机位图/GL 内存预算紧张，大图查看、
              PDF 渲染、图片旋转/裁剪等重任务需要更多堆空间，否则直接 OOM 崩溃。 -->
         <activity

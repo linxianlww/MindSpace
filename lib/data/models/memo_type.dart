@@ -1,9 +1,10 @@
-/// 铭记的四大类型。存储时用 [wire] 字符串落库/落盘，避免枚举序号变化带来兼容问题。
+/// 铭记的五大类型。存储时用 [wire] 字符串落库/落盘，避免枚举序号变化带来兼容问题。
 enum MemoType {
   text('text'),
   media('media'),
   audio('audio'),
-  file('file');
+  file('file'),
+  totp('totp');
 
   const MemoType(this.wire);
 
@@ -16,6 +17,7 @@ enum MemoType {
         MemoType.media => '媒体集',
         MemoType.audio => '音频',
         MemoType.file => '文件',
+        MemoType.totp => 'TOTP 验证码',
       };
 
   static MemoType fromWire(String? value) {

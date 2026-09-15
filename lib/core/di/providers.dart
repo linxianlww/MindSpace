@@ -79,6 +79,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       themeMode: mode,
       useDynamicColor: _prefs.getBool(AppSettings.kDynamic) ?? true,
       seedColorValue: _prefs.getInt(AppSettings.kSeed),
+      lineHeight: (_prefs.getDouble(AppSettings.kLineHeight) ?? 1.7)
+          .clamp(1.2, 2.2),
+      paragraphSpacing:
+          (_prefs.getDouble(AppSettings.kParagraphSpacing) ?? 10.0)
+              .clamp(0.0, 32.0),
       sortField: _prefs.getString(AppSettings.kSortField) ?? 'updatedAt',
       sortAscending: _prefs.getBool(AppSettings.kSortAsc) ?? false,
     );
@@ -101,6 +106,18 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     } else {
       await _prefs.setInt(AppSettings.kSeed, value);
     }
+  }
+
+  Future<void> setLineHeight(double value) async {
+    final v = value.clamp(1.2, 2.2);
+    state = state.copyWith(lineHeight: v);
+    await _prefs.setDouble(AppSettings.kLineHeight, v);
+  }
+
+  Future<void> setParagraphSpacing(double value) async {
+    final v = value.clamp(0.0, 32.0);
+    state = state.copyWith(paragraphSpacing: v);
+    await _prefs.setDouble(AppSettings.kParagraphSpacing, v);
   }
 
   Future<void> setSort(String field, bool ascending) async {

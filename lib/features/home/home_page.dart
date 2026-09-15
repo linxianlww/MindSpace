@@ -83,7 +83,7 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                       onChanged: (v) =>
                           ref.read(searchKeywordProvider.notifier).state = v,
                     )
-                  : const Text('MindSpace'),
+                  : const Text('NekoBox'),
               actions: [
                 IconButton(
                   tooltip: '搜索',
@@ -218,6 +218,10 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
         if (mounted) context.push('/memo/audio/${m.id}/record');
       case CreateTarget.file:
         await _importFiles(folderId);
+      case CreateTarget.totp:
+        final m = await memoRepo.createBlank(MemoType.totp,
+            folderId: folderId, title: '新验证码');
+        if (mounted) context.push('/memo/totp/${m.id}/edit');
     }
   }
 

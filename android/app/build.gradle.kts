@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.aria.mindspace"
+    namespace = "aria.neko.box"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.aria.mindspace"
+        applicationId = "aria.neko.box"
         // 【兼容性】minSdk = 26（Android 8.0）：
         // ① 产品要求支持 Android 8.x；
         // ② java.time 自 API 26 起为系统原生 API，避免依赖任何需 desugar 的路径；

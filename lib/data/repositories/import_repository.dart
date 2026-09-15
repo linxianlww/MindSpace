@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -61,15 +62,12 @@ class ImportRepository {
       case MemoType.text:
         final content = await _fs.readString(source);
         final ext = FileTypes.extensionOf(source);
-        final fileName = ext == 'txt'
-            ? 'content.txt'
-            : ext == 'rtf'
-                ? 'content.rtf'
-                : 'content.md';
         final dir = storage.memoDir(memoId: memo.id, folderId: folderId);
         _fs.ensureDir(dir);
-        final target = p.join(dir, fileName);
-        await _fs.writeString(target, content);
+        // 统一为富文本唯一正本 content.delta.json：不再保留 txt/md/rtf
+        // 副本，避免同一份正文在磁盘上重复存储（分享/导出时按需转换）。
+        final target = p.join(dir, 'content.delta.json');
+        await _fs.writeString(target, jsonEncode([{'insert': '$content\n'}]));
         await _memos.save(memo.copyWith(
           metadata: {'filePath': target, 'sourceFormat': ext},
         ));
@@ -111,6 +109,8 @@ class ImportRepository {
 
       case MemoType.media:
         break; // 多图场景走 _importMediaSet
+      case MemoType.totp:
+        break; // TOTP 不走文件导入（二维码扫码单独入口）
     }
     return (await _memos.findById(memo.id))!;
   }

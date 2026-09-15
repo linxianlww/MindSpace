@@ -17,6 +17,8 @@ void openMemo(BuildContext context, Memo memo) {
       context.push('/memo/audio/$id');
     case MemoType.file:
       context.push('/memo/file/$id');
+    case MemoType.totp:
+      context.push('/memo/totp/$id');
   }
 }
 
@@ -31,5 +33,7 @@ void openNewMemo(BuildContext context, MemoType type, String id) {
       context.push('/memo/audio/$id/record');
     case MemoType.file:
       context.push('/memo/file/$id');
+    case MemoType.totp:
+      context.push('/memo/totp/$id/edit');
   }
 }

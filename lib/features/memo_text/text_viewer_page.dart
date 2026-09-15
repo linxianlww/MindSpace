@@ -1,10 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/storage/mindspace_storage.dart';
+import '../../../core/di/providers.dart';
+import '../../../core/utils/markdown_delta.dart';
 import '../../../core/widgets/state_views.dart';
 import '../share/share_service.dart';
 import 'text_provider.dart';
@@ -24,6 +27,7 @@ class TextViewerPage extends ConsumerWidget {
         body: ErrorState(message: '$e'),
       ),
       data: (data) {
+        final settings = ref.watch(settingsProvider);
         return Scaffold(
           appBar: AppBar(
             title: Text(data.memo.title,
@@ -35,16 +39,18 @@ class TextViewerPage extends ConsumerWidget {
                   if (v == 'text') {
                     share.shareText(data.controller.document.toPlainText());
                   } else if (v == 'file') {
-                    final p = data.memo.metadata['filePath'] as String?;
-                    // 防越权：只分享应用私有目录内的文件。
-                    if (p != null &&
-                        MindspaceStorage.instance.isWithinSupport(p)) {
-                      share.shareFile(p);
-                    }
+                    // 正文仅存 delta.json：分享为文件时实时转 Markdown。
+                    final ops = data.controller.document.toDelta().toJson();
+                    final md = MarkdownDelta.toMarkdown(ops);
+                    share.shareBytes(utf8.encode(md),
+                        fileName: '$memoId.md');
+                  } else if (v == 'image') {
+                    context.push('/share/image/$memoId');
                   }
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'text', child: Text('分享为文本')),
+                  PopupMenuItem(value: 'image', child: Text('分享为图片')),
                   PopupMenuItem(value: 'file', child: Text('分享为文件')),
                 ],
               ),
@@ -67,6 +73,8 @@ class TextViewerPage extends ConsumerWidget {
                 child: _ReadOnlyQuillView(
                   delta: data.controller.document.toDelta().toJson(),
                   fontFamily: data.fontFamily,
+                  lineHeight: settings.lineHeight,
+                  paragraphSpacing: settings.paragraphSpacing,
                 ),
               ),
             ),
@@ -84,10 +92,17 @@ class TextViewerPage extends ConsumerWidget {
 
 /// 基于独立 controller 的只读富文本渲染。
 class _ReadOnlyQuillView extends StatefulWidget {
-  const _ReadOnlyQuillView({required this.delta, this.fontFamily});
+  const _ReadOnlyQuillView({
+    required this.delta,
+    this.fontFamily,
+    this.lineHeight = 1.7,
+    this.paragraphSpacing = 10,
+  });
 
   final List<dynamic> delta;
   final String? fontFamily;
+  final double lineHeight;
+  final double paragraphSpacing;
 
   @override
   State<_ReadOnlyQuillView> createState() => _ReadOnlyQuillViewState();
@@ -153,14 +168,14 @@ class _ReadOnlyQuillViewState extends State<_ReadOnlyQuillView> {
     final base = TextStyle(
       fontFamily: family,
       fontSize: 16,
-      height: 1.5,
+      height: widget.lineHeight,
       color: Theme.of(context).colorScheme.onSurface,
     );
     return DefaultStyles(
       paragraph: DefaultTextBlockStyle(
         base,
         const HorizontalSpacing(0, 0),
-        const VerticalSpacing(0, 4),
+        VerticalSpacing(0, widget.paragraphSpacing),
         const VerticalSpacing(0, 0),
         null,
       ),

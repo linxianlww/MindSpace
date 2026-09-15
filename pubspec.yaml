@@ -1,5 +1,5 @@
 name: mindspace
-description: "MindSpace —— 本地优先、隐私优先的类笔记 App（文本 / 媒体集 / 音频 / 文件 四类铭记）。"
+description: "NekoBox —— 本地优先、隐私优先的类笔记 App（文本 / 媒体集 / 音频 / 文件 四类铭记）。"
 publish_to: "none"
 version: 1.0.0+1
 
@@ -44,6 +44,7 @@ dependencies:
   photo_view: ^0.15.0
   image: ^4.0.0
   image_cropper: ^8.0.0
+  flutter_colorpicker: ^1.1.0 # 主题种子色取色器（自定义 HEX）
 
   # —— 视频 ——
   video_player: ^2.9.2
@@ -62,6 +63,10 @@ dependencies:
   excel: ^4.0.6           # XLSX/XLS 解析
   archive: ^3.6.1         # zip / docx(xml+zip) 解包、备份归档
   xml: ^6.5.0             # 自研 DOCX XML 解析（替代已停更的 docx_to_text）
+
+  # —— TOTP 验证码铭记 ——
+  crypto: ^3.0.5          # RFC6238 TOTP（HMAC-SHA1）
+  mobile_scanner: ^5.2.3  # 扫码导入 otpauth://（Google/1Password 兼容）
 
   # —— 设置 / 日志 / 应用信息 / 链接 ——
   shared_preferences: ^2.3.3

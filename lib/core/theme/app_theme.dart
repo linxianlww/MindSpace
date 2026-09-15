@@ -26,11 +26,36 @@ class AppTheme {
   }
 
   /// 未开启动态取色 / 系统不支持时的兜底种子色方案。
-  static ColorScheme _fallback(Brightness brightness) =>
-      ColorScheme.fromSeed(
-        seedColor: Md3eTokens.seedPalette['靛蓝']!,
+  /// 默认品牌配色：亮橙 + 红双种子（MD3E），红色仅接管 secondary 角色。
+  static ColorScheme _fallback(Brightness brightness) => dualSeedScheme(
+        seed: Md3eTokens.brandSeed,
+        secondarySeed: Md3eTokens.brandSecondarySeed,
         brightness: brightness,
       );
+
+  /// MD3E 双种子取色：主种子生成整套色调方案，次种子仅接管 secondary 角色
+  /// （含容器色与固定色），使次级色独立出自红色调——
+  /// 当前 Flutter 的 `fromSeed` 只接受单一 seedColor，故用此公开 API 组合实现。
+  static ColorScheme dualSeedScheme({
+    required Color seed,
+    required Color secondarySeed,
+    required Brightness brightness,
+  }) {
+    final scheme =
+        ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final sec =
+        ColorScheme.fromSeed(seedColor: secondarySeed, brightness: brightness);
+    return scheme.copyWith(
+      secondary: sec.primary,
+      onSecondary: sec.onPrimary,
+      secondaryContainer: sec.primaryContainer,
+      onSecondaryContainer: sec.onPrimaryContainer,
+      secondaryFixed: sec.primaryFixed,
+      secondaryFixedDim: sec.primaryFixedDim,
+      onSecondaryFixed: sec.onPrimaryFixed,
+      onSecondaryFixedVariant: sec.onPrimaryFixedVariant,
+    );
+  }
 
   static ThemeData _base(ColorScheme scheme) {
     final isLight = scheme.brightness == Brightness.light;
@@ -155,7 +180,8 @@ class AppTheme {
       ),
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
-          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          // Android 14+ 预测性返回（滑动跟随系统手势动画，低版本自动回退）。
+          TargetPlatform.android: PredictiveBackPageTransitionsBuilder(),
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
         },
       ),

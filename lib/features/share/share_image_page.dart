@@ -2,13 +2,16 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:screenshot/screenshot.dart';
 
-import '../../data/models/memo.dart';
+import '../../core/di/providers.dart';
+import '../../data/models/memo_type.dart';
 import '../home/home_provider.dart';
+import '../memo_text/text_provider.dart';
 import 'share_service.dart';
+import 'text_share_image.dart';
 
-/// 把铭记渲染为卡片图片并分享（RepaintBoundary + screenshot）。
+/// 文本铭记「分享为长图」：离线渲染 delta 为高分辨率长图，
+/// 支持预览 + 分享（行距/段距跟随设置页“文本排版”）。
 class ShareImagePage extends ConsumerStatefulWidget {
   const ShareImagePage({super.key, required this.memoId});
   final String memoId;
@@ -18,124 +21,122 @@ class ShareImagePage extends ConsumerStatefulWidget {
 }
 
 class _ShareImagePageState extends ConsumerState<ShareImagePage> {
-  final _controller = ScreenshotController();
-  bool _saving = false;
+  Uint8List? _bytes;
+  Object? _error;
+  bool _generating = false;
 
-  Future<void> _captureAndShare(Memo memo) async {
-    setState(() => _saving = true);
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _generate());
+  }
+
+  Future<void> _generate() async {
+    if (_generating) return;
+    setState(() {
+      _generating = true;
+      _error = null;
+    });
     try {
-      final Uint8List? bytes = await _controller.capture();
-      if (bytes != null) {
-        await ref
-            .read(shareServiceProvider)
-            .shareBytes(bytes, fileName: '${memo.title}.png');
-      }
+      final data =
+          await ref.read(textEditorProvider(widget.memoId).future);
+      final memo = data.memo;
+      final ops = data.controller.document.toDelta().toJson();
+      final settings = ref.read(settingsProvider);
+      final bytes = await renderTextMemoLongImage(
+        memo: memo,
+        ops: ops,
+        lineHeight: settings.lineHeight,
+        paragraphSpacing: settings.paragraphSpacing,
+      );
+      if (mounted) setState(() => _bytes = bytes);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() => _generating = false);
     }
+  }
+
+  Future<void> _share() async {
+    final bytes = _bytes;
+    if (bytes == null) return;
+    final memo = ref.read(memoDetailProvider(widget.memoId)).valueOrNull;
+    final name = (memo?.title ?? '铭记').replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    await ref
+        .read(shareServiceProvider)
+        .shareBytes(bytes, fileName: '$name.png');
   }
 
   @override
   Widget build(BuildContext context) {
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
+    final type = memoAsync.valueOrNull?.type;
+
     return Scaffold(
       appBar: AppBar(title: const Text('分享为图片')),
-      body: memoAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
-        data: (memo) {
-          if (memo == null) return const Center(child: Text('铭记不存在'));
-          return Column(
-            children: [
-              Expanded(
-                child: Center(
+      body: Column(
+        children: [
+          Expanded(
+            child: Builder(builder: (context) {
+              if (type != null && type != MemoType.text) {
+                return const Center(child: Text('仅支持文本铭记生成长图'));
+              }
+              if (_error != null) {
+                return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    // 卡片宽度随可用空间自适应（180~360），
-                    // 避免 1:1 小屏上固定 360 宽溢出屏幕。
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final w = constraints.maxWidth.clamp(180.0, 360.0);
-                        return SizedBox(
-                          width: w,
-                          child: Screenshot(
-                            controller: _controller,
-                            child: _ShareCard(memo: memo),
-                          ),
-                        );
-                      },
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.error_outline,
+                            size: 40,
+                            color: Theme.of(context).colorScheme.error),
+                        const SizedBox(height: 12),
+                        Text('生成失败：$_error'),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                            onPressed: _generate,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('重试')),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              final bytes = _bytes;
+              if (bytes == null) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(maxWidth: 560),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.memory(bytes,
+                          filterQuality: FilterQuality.high,
+                          gaplessPlayback: true),
                     ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52)),
-                  onPressed: _saving ? null : () => _captureAndShare(memo),
-                  icon: const Icon(Icons.ios_share),
-                  label: Text(_saving ? '正在生成…' : '生成并分享图片'),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _ShareCard extends StatelessWidget {
-  const _ShareCard({required this.memo});
-  final Memo memo;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: memo.colorValue ?? Colors.indigo,
-      brightness: Theme.of(context).brightness,
-    );
-    final excerpt = memo.metadata['excerpt'] as String? ?? memo.remark ?? '';
-    return Container(
-      width: 360,
-      padding: const EdgeInsets.all(28),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [scheme.primaryContainer, scheme.surface],
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.psychology_alt, color: scheme.primary),
-              const SizedBox(width: 8),
-              Text('MindSpace',
-                  style: TextStyle(
-                      color: scheme.primary, fontWeight: FontWeight.bold)),
-            ],
+              );
+            }),
           ),
-          const SizedBox(height: 20),
-          Text(memo.title,
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: scheme.onSurface)),
-          const SizedBox(height: 12),
-          if (excerpt.isNotEmpty)
-            Text(excerpt,
-                maxLines: 8,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 15, height: 1.6, color: scheme.onSurfaceVariant)),
-          const SizedBox(height: 24),
-          Text('${memo.type.label}铭记', style: TextStyle(color: scheme.primary)),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52)),
+                onPressed: _bytes == null ? null : _share,
+                icon: const Icon(Icons.ios_share),
+                label: Text(_bytes == null ? '正在生成…' : '分享长图'),
+              ),
+            ),
+          ),
         ],
       ),
     );

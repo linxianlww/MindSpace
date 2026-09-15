@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/md3e_tokens.dart';
 
 /// 新建目标类型。
-enum CreateTarget { text, media, audio, file, folder }
+enum CreateTarget { text, media, audio, file, folder, totp }
 
 /// MD3E 展开式 FAB：点击后以弹性曲线在主按钮上方（屏幕右侧）展开新建入口。
 ///
@@ -30,6 +30,7 @@ class _CreateFabState extends State<CreateFab>
     (CreateTarget.media, Icons.photo_library_outlined, '新建媒体集', Color(0xFF0F7B6C)),
     (CreateTarget.audio, Icons.mic_none_rounded, '新建音频', Color(0xFFB0005B)),
     (CreateTarget.file, Icons.upload_file_outlined, '导入文件', Color(0xFF3B6B2E)),
+    (CreateTarget.totp, Icons.pin_outlined, 'TOTP 验证码', Color(0xFF6A1B9A)),
   ];
 
   void _toggle() {

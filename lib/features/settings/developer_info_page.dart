@@ -53,7 +53,7 @@ class _DeveloperInfoPageState extends State<DeveloperInfoPage> {
                   Icon(Icons.psychology_alt,
                       size: 64, color: theme.colorScheme.primary),
                   const SizedBox(height: 12),
-                  Text(info?.appName ?? 'MindSpace',
+                  Text(info?.appName ?? 'NekoBox',
                       style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 4),
                   Text(

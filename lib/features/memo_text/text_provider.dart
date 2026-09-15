@@ -120,29 +120,44 @@ class TextEditorNotifier
     return TextEditorData(memo: memo, controller: controller, fontFamily: family);
   }
 
-  /// 保存：写 content.delta.json / content.md / content.txt，并刷新元数据。
+  /// 保存：仅写一份 content.delta.json（富文本唯一正本），不再同时落
+  /// markdown / 纯文本副本，避免同一份内容在磁盘上重复占空间。
+  /// 需要 Markdown / 纯文本时由 delta 实时转换（分享、导出、搜索）。
   Future<void> save({String? title}) async {
     final cur = state.value;
     if (cur == null) return;
     state = AsyncData(cur.copyWith(saving: true));
     final controller = cur.controller;
     final ops = controller.document.toDelta().toJson();
-    final markdown = MarkdownDelta.toMarkdown(ops);
     final plain = MarkdownDelta.toPlainText(ops);
     final memo = cur.memo;
     final storage = MindspaceStorage.instance;
     final dir = storage.memoDir(memoId: memo.id, folderId: memo.folderId);
     final fs = ref.read(fileSystemDatasourceProvider);
     fs.ensureDir(dir);
-    await fs.writeString(p.join(dir, 'content.delta.json'), jsonEncode(ops));
-    await fs.writeString(p.join(dir, 'content.md'), markdown);
-    await fs.writeString(p.join(dir, 'content.txt'), plain);
+    final deltaPath = p.join(dir, 'content.delta.json');
+    await fs.writeString(deltaPath, jsonEncode(ops));
+    // 清理历史三文件存储遗留（首次保存老数据后即瘦身），
+    // 同一目录下可能残留 content.md / content.txt / content.rtf。
+    for (final legacy in const [
+      'content.md',
+      'content.txt',
+      'content.rtf',
+      'content.markdown'
+    ]) {
+      final lp = p.join(dir, legacy);
+      if (lp != deltaPath && fs.exists(lp)) {
+        try {
+          await fs.delete(lp);
+        } catch (_) {/* 清理失败不影响保存 */}
+      }
+    }
 
     final next = memo.copyWith(
       title: (title == null || title.isEmpty) ? memo.title : title,
       metadata: {
         ...memo.metadata,
-        'filePath': p.join(dir, 'content.md'),
+        'filePath': deltaPath,
         'excerpt': plain.isEmpty ? '空文本' : plain,
       },
     );

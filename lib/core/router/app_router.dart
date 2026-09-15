@@ -11,11 +11,15 @@ import '../../features/memo_media/media_editor_page.dart';
 import '../../features/memo_media/media_viewer_page.dart';
 import '../../features/memo_text/text_editor_page.dart';
 import '../../features/memo_text/text_viewer_page.dart';
+import '../../features/memo_totp/totp_edit_page.dart';
+import '../../features/memo_totp/totp_scan_page.dart';
+import '../../features/memo_totp/totp_view_page.dart';
 import '../../features/settings/backup_settings_page.dart';
 import '../../features/settings/developer_info_page.dart';
 import '../../features/settings/font_settings_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/storage_settings_page.dart';
+import '../../features/settings/text_settings_page.dart';
 import '../../features/settings/theme_settings_page.dart';
 import '../../features/share/share_image_page.dart';
 
@@ -76,6 +80,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (c, s) =>
             _sharedAxis(FileViewerPage(memoId: s.pathParameters['memoId']!)),
       ),
+      // TOTP 验证码
+      GoRoute(
+        path: '/memo/totp/:memoId',
+        pageBuilder: (c, s) =>
+            _sharedAxis(TotpViewPage(memoId: s.pathParameters['memoId']!)),
+      ),
+      GoRoute(
+        path: '/memo/totp/:memoId/edit',
+        pageBuilder: (c, s) =>
+            _sharedAxis(TotpEditPage(memoId: s.pathParameters['memoId']!)),
+      ),
+      GoRoute(
+        path: '/memo/totp/:memoId/scan',
+        pageBuilder: (c, s) => _sharedAxis(const TotpScanPage()),
+      ),
       // 分享为图片
       GoRoute(
         path: '/share/image/:memoId',
@@ -90,6 +109,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings/theme',
         pageBuilder: (c, s) => _sharedAxis(const ThemeSettingsPage()),
+      ),
+      GoRoute(
+        path: '/settings/text',
+        pageBuilder: (c, s) => _sharedAxis(const TextSettingsPage()),
       ),
       GoRoute(
         path: '/settings/font',

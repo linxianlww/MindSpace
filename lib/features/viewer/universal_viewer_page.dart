@@ -7,6 +7,7 @@ import '../memo_audio/audio_player_page.dart';
 import '../memo_file/file_viewer_page.dart';
 import '../memo_media/media_viewer_page.dart';
 import '../memo_text/text_viewer_page.dart';
+import '../memo_totp/totp_view_page.dart';
 
 /// 通用查看器：按铭记类型分发到对应详情页。
 class UniversalViewerPage extends ConsumerWidget {
@@ -33,6 +34,8 @@ class _Dispatcher extends ConsumerWidget {
         return AudioPlayerPage(memoId: memoId);
       case MemoType.file:
         return FileViewerPage(memoId: memoId);
+      case MemoType.totp:
+        return TotpViewPage(memoId: memoId);
     }
   }
 

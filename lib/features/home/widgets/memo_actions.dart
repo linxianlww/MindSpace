@@ -1,15 +1,20 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../core/storage/mindspace_storage.dart';
 import '../../../core/theme/md3e_tokens.dart';
+import '../../../core/utils/markdown_delta.dart';
 import '../../../core/utils/ms_date_utils.dart';
+import '../../../core/utils/totp.dart';
 import '../../../data/models/folder.dart';
 import '../../../data/models/memo.dart';
 import '../../../data/models/memo_type.dart';
 import '../home_provider.dart';
 import '../../share/share_service.dart';
+import '../../memo_totp/totp_provider.dart';
 
 /// 长按铭记卡片弹出的操作表。
 class MemoActions {
@@ -159,6 +164,20 @@ class MemoActions {
       case MemoType.text:
         final path = memo.metadata['filePath'] as String?;
         if (_safeShareable(path)) {
+          try {
+            // filePath 现指向 content.delta.json：分享为文件时实时转
+            // Markdown（不落盘副本），格式错误则回退为直接分享原始文件。
+            final raw =
+                await ref.read(fileSystemDatasourceProvider).readString(path!);
+            final decoded = jsonDecode(raw);
+            if (decoded is List<dynamic>) {
+              final md = MarkdownDelta.toMarkdown(decoded);
+              final safeName = '${memo.title}.md'
+                  .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+              await share.shareBytes(utf8.encode(md), fileName: safeName);
+              return;
+            }
+          } catch (_) {}
           await share.shareFile(path!, text: memo.title);
         } else {
           await share.shareText(memo.title);
@@ -167,6 +186,30 @@ class MemoActions {
         final p = memo.metadata['originalPath'] as String? ??
             memo.metadata['trimmedPath'] as String?;
         if (_safeShareable(p)) await share.shareFile(p!);
+      case MemoType.totp:
+        // 分享即导出 otpauth 配置（含密钥，供迁移到其他验证器），先明确确认。
+        final cfg = totpConfigOf(memo);
+        if (cfg != null) {
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('导出 TOTP 配置'),
+              content: const Text(
+                  '将分享包含密钥的 otpauth 链接，可导入 Google Authenticator 等应用。确定继续？'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('取消')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('导出')),
+              ],
+            ),
+          );
+          if (ok == true) {
+            await share.shareText(buildOtpauthUri(cfg), subject: memo.title);
+          }
+        }
       case MemoType.file:
       case MemoType.media:
         final p = memo.metadata['path'] as String?;
@@ -193,7 +236,7 @@ class MemoActions {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _row('类型', memo.type.wire),
+            _row('类型', memo.type.label),
             _row('ID', memo.id),
             _row('创建', MsDateUtils.formatFull(memo.createdAt)),
             _row('更新', MsDateUtils.formatFull(memo.updatedAt)),

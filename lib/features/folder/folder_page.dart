@@ -139,6 +139,10 @@ class FolderPage extends ConsumerWidget {
                     .read(importRepositoryProvider)
                     .importFiles(paths, folderId: folderId);
               }
+            case CreateTarget.totp:
+              final m = await repo.createBlank(MemoType.totp,
+                  folderId: folderId);
+              if (context.mounted) context.push('/memo/totp/${m.id}/edit');
           }
         },
       ),

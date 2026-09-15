@@ -12,14 +12,14 @@ import 'core/utils/app_logger.dart';
 import 'features/memo_media/media_provider.dart';
 
 /// 应用根组件：主题（动态取色 / 种子色）+ 路由。
-class MindSpaceApp extends ConsumerStatefulWidget {
-  const MindSpaceApp({super.key});
+class NekoBoxApp extends ConsumerStatefulWidget {
+  const NekoBoxApp({super.key});
 
   @override
-  ConsumerState<MindSpaceApp> createState() => _MindSpaceAppState();
+  ConsumerState<NekoBoxApp> createState() => _NekoBoxAppState();
 }
 
-class _MindSpaceAppState extends ConsumerState<MindSpaceApp> {
+class _NekoBoxAppState extends ConsumerState<NekoBoxApp> {
   @override
   void initState() {
     super.initState();
@@ -40,28 +40,47 @@ class _MindSpaceAppState extends ConsumerState<MindSpaceApp> {
 
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
-        final seed = settings.seedColorValue != null
-            ? Color(settings.seedColorValue!)
-            : Md3eTokens.seedPalette['靛蓝'];
+        final userSeed = settings.seedColorValue;
 
         ColorScheme lightScheme;
         ColorScheme darkScheme;
         if (settings.useDynamicColor &&
             (lightDynamic != null || darkDynamic != null)) {
-          // Android 12+ 壁纸取色。
+          // Android 12+ 壁纸取色；系统无动态方案时回退到品牌默认配色。
           lightScheme = lightDynamic ??
-              ColorScheme.fromSeed(seedColor: seed!, brightness: Brightness.light);
+              AppTheme.dualSeedScheme(
+                seed: Md3eTokens.brandSeed,
+                secondarySeed: Md3eTokens.brandSecondarySeed,
+                brightness: Brightness.light,
+              );
           darkScheme = darkDynamic ??
-              ColorScheme.fromSeed(seedColor: seed!, brightness: Brightness.dark);
-        } else {
+              AppTheme.dualSeedScheme(
+                seed: Md3eTokens.brandSeed,
+                secondarySeed: Md3eTokens.brandSecondarySeed,
+                brightness: Brightness.dark,
+              );
+        } else if (userSeed != null) {
+          // 用户通过取色器/预设自定义的 HEX 种子色（单种子取色）。
           lightScheme = ColorScheme.fromSeed(
-              seedColor: seed!, brightness: Brightness.light);
+              seedColor: Color(userSeed), brightness: Brightness.light);
           darkScheme = ColorScheme.fromSeed(
-              seedColor: seed, brightness: Brightness.dark);
+              seedColor: Color(userSeed), brightness: Brightness.dark);
+        } else {
+          // 品牌默认：亮橙主种子 + 红次种子（MD3E 双种子取色）。
+          lightScheme = AppTheme.dualSeedScheme(
+            seed: Md3eTokens.brandSeed,
+            secondarySeed: Md3eTokens.brandSecondarySeed,
+            brightness: Brightness.light,
+          );
+          darkScheme = AppTheme.dualSeedScheme(
+            seed: Md3eTokens.brandSeed,
+            secondarySeed: Md3eTokens.brandSecondarySeed,
+            brightness: Brightness.dark,
+          );
         }
 
         return MaterialApp.router(
-          title: 'MindSpace',
+          title: 'NekoBox',
           debugShowCheckedModeBanner: false,
           themeMode: settings.themeMode,
           theme: AppTheme.light(lightScheme),

@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/database/app_database.dart';
 import '../../core/storage/mindspace_storage.dart';
+import '../../core/utils/markdown_delta.dart';
 import '../../core/utils/ms_date_utils.dart';
 import '../../core/utils/uuid_utils.dart';
 import '../datasources/file_system_datasource.dart';
@@ -58,10 +59,23 @@ class MemoRepository {
     });
   }
 
-  /// 读取文本型铭记的正文（优先 content.md，其次 content.txt，最后摘要）。
+  /// 读取文本型铭记的正文（优先 content.delta.json 实时转纯文本，
+  /// 兼容旧数据的 content.md/content.txt，最后回退摘要）。
   Future<String> _textContent(Memo memo) async {
     final dir = MindspaceStorage.instance
         .memoDir(memoId: memo.id, folderId: memo.folderId);
+    final deltaPath = p.join(dir, 'content.delta.json');
+    if (_fs.exists(deltaPath)) {
+      try {
+        final raw = await _fs.readString(deltaPath);
+        final decoded = jsonDecode(raw);
+        if (decoded is List<dynamic>) {
+          return MarkdownDelta.toPlainText(decoded);
+        }
+      } catch (_) {
+        // delta 损坏则继续尝试旧文件。
+      }
+    }
     for (final name in const ['content.md', 'content.txt']) {
       final path = p.join(dir, name);
       if (_fs.exists(path)) {

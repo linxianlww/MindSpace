@@ -37,6 +37,9 @@ class AppConstants {
   static const String prefSeedColor = 'pref.seed_color'; // int
   static const String prefSortField = 'pref.sort_field'; // createdAt/updatedAt/title
   static const String prefSortAsc = 'pref.sort_asc'; // bool
+  static const String prefLineHeight = 'pref.line_height'; // double：文本阅读行距
+  static const String prefParagraphSpacing =
+      'pref.paragraph_spacing'; // double：段落间距（px）
 
   /// 瀑布流单页加载条数（分页）。
   static const int pageSize = 30;

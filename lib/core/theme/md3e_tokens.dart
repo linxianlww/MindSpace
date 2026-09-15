@@ -45,13 +45,20 @@ class Md3eTokens {
     return 2;
   }
 
-  // —— 备选种子色板（设置页可切换）——
+  // —— 品牌色（NekoBox）：亮橙主种子 + 红次种子，符合 MD3E 双种子取色规范 ——
+  /// 品牌主种子色：亮橙。
+  static const Color brandSeed = Color(0xFFFF6D00);
+  /// 品牌次种子色：红（MD3E 双种子取色，丰富衍生调色板）。
+  static const Color brandSecondarySeed = Color(0xFFE53935);
+
+  // —— 备选种子色板（设置页可切换，也可用取色器自定义 HEX）——
   static const Map<String, Color> seedPalette = {
+    '亮橙': Color(0xFFFF6D00),
+    '红': Color(0xFFE53935),
+    '暖橙': Color(0xFF8B4A00),
     '靛蓝': Color(0xFF5B5BD6),
     '青绿': Color(0xFF00696E),
-    '暖橙': Color(0xFF8B4A00),
     '玫红': Color(0xFFB0005B),
     '森绿': Color(0xFF3B6B2E),
-    '深紫': Color(0xFF6750A4),
   };
 }

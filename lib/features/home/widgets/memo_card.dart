@@ -103,6 +103,7 @@ class MemoCard extends StatelessWidget {
         MemoType.media => Icons.photo_library_rounded,
         MemoType.audio => Icons.graphic_eq_rounded,
         MemoType.file => Icons.description_outlined,
+        MemoType.totp => Icons.pin_outlined,
       };
 
   String? get _subtitle {
@@ -117,6 +118,13 @@ class MemoCard extends StatelessWidget {
         return dur == null ? '音频铭记' : '时长 ${MsDateUtils.formatDuration(dur)}';
       case MemoType.file:
         return (memo.metadata['originalName'] as String?) ?? '文件铭记';
+      case MemoType.totp:
+        final issuer = memo.metadata['totpIssuer'] as String?;
+        final account = memo.metadata['totpAccount'] as String?;
+        if (issuer != null && issuer.isNotEmpty && account != null && account.isNotEmpty) {
+          return '$issuer · $account';
+        }
+        return '动态验证码（不显示密钥）';
     }
   }
 
@@ -129,8 +137,18 @@ class MemoCard extends StatelessWidget {
           return ClipRRect(
             borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(Md3eTokens.radiusCard)),
-            child: Image.file(File(thumb),
-                height: 130, width: double.infinity, fit: BoxFit.cover),
+            child: RepaintBoundary(
+              child: Image.file(
+                File(thumb),
+                height: 130,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                // 缩略图按 260px 解码即可满足卡片尺寸，避免解码原图
+                // 浪费内存与 CPU（瀑布流大量图片同时解码时会掉帧）。
+                cacheWidth: 260,
+                gaplessPlayback: true,
+              ),
+            ),
           );
         }
         return Container(
@@ -164,6 +182,29 @@ class MemoCard extends StatelessWidget {
           alignment: Alignment.center,
           child: Icon(Icons.insert_drive_file_outlined,
               color: scheme.primary, size: 32),
+        );
+      case MemoType.totp:
+        return Container(
+          height: 64,
+          color: scheme.primaryContainer,
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.pin_outlined,
+                  color: scheme.onPrimaryContainer, size: 22),
+              const SizedBox(width: 8),
+              Text(
+                'TIME-BASED OTP',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(
+                        color: scheme.onPrimaryContainer,
+                        letterSpacing: 1.2),
+              ),
+            ],
+          ),
         );
     }
   }

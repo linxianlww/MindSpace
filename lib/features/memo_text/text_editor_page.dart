@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:screenshot/screenshot.dart';
 
+import '../../core/di/providers.dart';
+import '../../core/utils/markdown_delta.dart';
 import '../share/share_service.dart';
 import 'text_provider.dart';
 import 'widgets/color_picker.dart';
@@ -21,7 +24,6 @@ class TextEditorPage extends ConsumerStatefulWidget {
 }
 
 class _TextEditorPageState extends ConsumerState<TextEditorPage> {
-  final ScreenshotController _shot = ScreenshotController();
   final FocusNode _focus = FocusNode();
 
   @override
@@ -44,6 +46,7 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
         body: Center(child: Text('加载失败：$e')),
       ),
       data: (data) {
+        final settings = ref.watch(settingsProvider);
         final memo = data.memo;
         return PopScope(
           // 返回时自动保存，避免内容丢失。
@@ -127,20 +130,20 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
                       constraints: const BoxConstraints(maxWidth: 840),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Screenshot(
-                          controller: _shot,
-                          child: ColoredBox(
-                            color: Theme.of(context).colorScheme.surface,
-                            child: QuillEditor.basic(
-                              focusNode: _focus,
-                              controller: data.controller,
-                              config: QuillEditorConfig(
-                                expands: true,
-                                placeholder: '开始书写…',
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                customStyles: _styles(context, data.fontFamily),
-                              ),
+                        child: ColoredBox(
+                          color: Theme.of(context).colorScheme.surface,
+                          child: QuillEditor.basic(
+                            focusNode: _focus,
+                            controller: data.controller,
+                            config: QuillEditorConfig(
+                              expands: true,
+                              placeholder: '开始书写…',
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              customStyles:
+                                  _styles(context, data.fontFamily,
+                                      settings.lineHeight,
+                                      settings.paragraphSpacing),
                             ),
                           ),
                         ),
@@ -161,21 +164,22 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     );
   }
 
-  DefaultStyles? _styles(BuildContext context, String? family) {
+  DefaultStyles? _styles(BuildContext context, String? family,
+      double lineHeight, double paragraphSpacing) {
     if (family == null) return null;
     // 自定义样式会整体替换默认段落样式，必须显式保留主题前景色，
     // 否则浅色模式下文字会退化为未着色（发白）。
     final base = TextStyle(
       fontFamily: family,
       fontSize: 16,
-      height: 1.5,
+      height: lineHeight,
       color: Theme.of(context).colorScheme.onSurface,
     );
     return DefaultStyles(
       paragraph: DefaultTextBlockStyle(
         base,
         const HorizontalSpacing(0, 0),
-        const VerticalSpacing(0, 4),
+        VerticalSpacing(0, paragraphSpacing),
         const VerticalSpacing(0, 0),
         null,
       ),
@@ -238,13 +242,14 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
         share.shareText(data.controller.document.toPlainText());
       case 'share_file':
         await _save();
-        final path = data.memo.metadata['filePath'] as String?;
-        if (path != null) share.shareFile(path);
+        // 正文仅存 delta.json，分享为文件时实时转 Markdown，不再落盘副本。
+        final ops = data.controller.document.toDelta().toJson();
+        final md = MarkdownDelta.toMarkdown(ops);
+        share.shareBytes(utf8.encode(md), fileName: '${data.memo.id}.md');
       case 'share_image':
         await _save();
-        final bytes = await _shot.capture(pixelRatio: 2);
-        if (bytes != null) {
-          share.shareBytes(bytes, fileName: '${data.memo.id}.png');
+        if (mounted) {
+          context.push('/share/image/${widget.memoId}');
         }
     }
   }

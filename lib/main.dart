@@ -33,7 +33,7 @@ Future<void> main() async {
       overrides: [
         sharedPrefsProvider.overrideWithValue(prefs),
       ],
-      child: const MindSpaceApp(),
+      child: const NekoBoxApp(),
     ),
   );
 }

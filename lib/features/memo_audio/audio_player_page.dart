@@ -80,6 +80,10 @@ class AudioPlayerPage extends ConsumerWidget {
   }
 }
 
+/// 播放区主体。
+///
+/// 只在这里 watch 低频字段（就绪态/错误/字幕/裁剪值）；高频变化的
+/// positionMs 由 [_WavePanel] 通过 select 单独消费，避免播放时整页重建。
 class _PlayerBody extends ConsumerWidget {
   const _PlayerBody({required this.memoId});
   final String memoId;
@@ -87,8 +91,20 @@ class _PlayerBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memo = ref.watch(memoDetailProvider(memoId)).value!;
-    // 播放器以 memoId 为 key：裁剪/改名等保存不会重建播放器、中断播放。
-    final player = ref.watch(audioPlayerProvider(memoId));
+    final ready = ref.watch(audioPlayerProvider(memoId).select((v) => v.ready));
+    final error = ref.watch(audioPlayerProvider(memoId).select((v) => v.error));
+    final subs = ref.watch(audioPlayerProvider(memoId).select((v) => v.subs));
+    final activeIndex = ref
+        .watch(audioPlayerProvider(memoId).select((v) => v.activeSubIndex));
+    // 裁剪值/时长低频变化，由信息 Tab 与裁剪 sheet 使用。
+    final durationMs =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.durationMs));
+    final fullDurationMs =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.fullDurationMs));
+    final trimStartMs =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.trimStartMs));
+    final trimEndMs =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.trimEndMs));
     final notifier = ref.read(audioPlayerProvider(memoId).notifier);
 
     return DefaultTabController(
@@ -106,143 +122,20 @@ class _PlayerBody extends ConsumerWidget {
                     Text(memo.title,
                         style: Theme.of(context).textTheme.titleLarge),
                     const SizedBox(height: 16),
-                    // 加载中 / 初始化失败的状态提示，避免"点击无反应"。
-                    if (player.error != null) ...[
-                      Card(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .errorContainer
-                            .withValues(alpha: 0.6),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: Row(
-                            children: [
-                              Icon(Icons.error_outline,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onErrorContainer),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(player.error!,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onErrorContainer)),
-                              ),
-                              TextButton(
-                                onPressed: notifier.retry,
-                                child: const Text('重试'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ] else if (!player.ready) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          const SizedBox(width: 10),
-                          Text('正在加载音频…',
-                              style: Theme.of(context).textTheme.bodyMedium),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    PlaybackWaveform(
-                      wave: player.wave,
-                      positionMs: player.positionMs,
-                      // 波形进度条按裁剪后有效时长绘制。
-                      durationMs: player.durationMs,
-                      // seek 回调统一绝对时间轴坐标（未裁剪时 trimStart 为 0）。
-                      onSeek: (ms) => notifier.seekTo(
-                          ms + (player.trimStartMs ?? 0)),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(MsDateUtils.formatDuration(player.positionMs)),
-                        Text(MsDateUtils.formatDuration(player.durationMs)),
-                      ],
-                    ),
+                    _StatusBanner(
+                        error: error, ready: ready, onRetry: notifier.retry),
+                    const SizedBox(height: 16),
+                    // 独立消费者：positionMs 每 200ms 变化，仅波形/时间重建。
+                    _WavePanel(memoId: memoId),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          iconSize: 30,
-                          icon: Icon(
-                              player.looping ? Icons.repeat_one : Icons.repeat),
-                          color: player.looping
-                              ? Theme.of(context).colorScheme.primary
-                              : null,
-                          onPressed: notifier.toggleLoop,
-                        ),
-                        const SizedBox(width: 8),
-                        FloatingActionButton(
-                          onPressed: notifier.toggle,
-                          child: Icon(player.playing
-                              ? Icons.pause
-                              : Icons.play_arrow),
-                        ),
-                        const SizedBox(width: 8),
-                        PopupMenuButton<double>(
-                          icon: Text('${player.speed}x',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600)),
-                          onSelected: notifier.setSpeed,
-                          itemBuilder: (_) => const [
-                            PopupMenuItem(value: 0.75, child: Text('0.75x')),
-                            PopupMenuItem(value: 1.0, child: Text('1.0x')),
-                            PopupMenuItem(value: 1.25, child: Text('1.25x')),
-                            PopupMenuItem(value: 1.5, child: Text('1.5x')),
-                            PopupMenuItem(value: 2.0, child: Text('2.0x')),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton.icon(
-                          onPressed: () => showModalBottomSheet(
-                            context: context,
-                            showDragHandle: true,
-                            // 横屏（高度受限）下允许 sheet 占满全屏并内部滚动。
-                            isScrollControlled: true,
-                            builder: (_) => SafeArea(
-                              child: SingleChildScrollView(
-                                child: AudioTrimmer(
-                                  memoId: memoId,
-                                  // 滑块坐标始终基于文件原始全长。
-                                  durationMs: player.fullDurationMs > 0
-                                      ? player.fullDurationMs
-                                      : player.durationMs,
-                                  initialStart: player.trimStartMs,
-                                  initialEnd: player.trimEndMs,
-                                  onApply: notifier.setTrimWindow,
-                                ),
-                              ),
-                            ),
-                          ),
-                          icon: const Icon(Icons.content_cut),
-                          label: const Text('裁剪'),
-                        ),
-                        TextButton.icon(
-                          onPressed: () => _importSubtitle(context, ref, memoId),
-                          icon: const Icon(Icons.subtitles_outlined),
-                          label: const Text('导入字幕'),
-                        ),
-                      ],
+                    _ControlsPanel(memoId: memoId),
+                    _TrimButtons(
+                      memoId: memoId,
+                      fullDurationMs: fullDurationMs,
+                      durationMs: durationMs,
+                      trimStartMs: trimStartMs,
+                      trimEndMs: trimEndMs,
+                      onApply: notifier.setTrimWindow,
                     ),
                   ],
                 ),
@@ -254,17 +147,17 @@ class _PlayerBody extends ConsumerWidget {
             child: TabBarView(
               children: [
                 SubtitleView(
-                  subs: player.subs,
-                  activeIndex: player.activeSubIndex,
+                  subs: subs,
+                  activeIndex: activeIndex,
                   onTap: notifier.jumpToSubtitle,
                 ),
                 _InfoTab(
                   memoId: memoId,
                   // 信息页时长以播放器实时状态为准；播放器未就绪时回退
                   // 到持久化 meta 中的旧值。
-                  durationMs: player.ready ? player.durationMs : null,
-                  trimStartMs: player.trimStartMs,
-                  trimEndMs: player.trimEndMs,
+                  durationMs: ready ? durationMs : null,
+                  trimStartMs: trimStartMs,
+                  trimEndMs: trimEndMs,
                 ),
               ],
             ),
@@ -273,9 +166,202 @@ class _PlayerBody extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _importSubtitle(
-      BuildContext context, WidgetRef ref, String memoId) async {
+/// 加载中 / 初始化失败状态（低频）。
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({
+    required this.error,
+    required this.ready,
+    required this.onRetry,
+  });
+  final String? error;
+  final bool ready;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (error != null) {
+      return Card(
+        color: scheme.errorContainer.withValues(alpha: 0.6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.error_outline, color: scheme.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(error!,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(color: scheme.onErrorContainer)),
+              ),
+              TextButton(onPressed: onRetry, child: const Text('重试')),
+            ],
+          ),
+        ),
+      );
+    }
+    if (!ready) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Text('正在加载音频…', style: Theme.of(context).textTheme.bodyMedium),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+/// 波形 + 时间标签：只消费高频的 positionMs/durationMs/wave/trimStartMs。
+class _WavePanel extends ConsumerWidget {
+  const _WavePanel({required this.memoId});
+  final String memoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pos =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.positionMs));
+    final dur =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.durationMs));
+    final wave = ref.watch(audioPlayerProvider(memoId).select((v) => v.wave));
+    final trimStart =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.trimStartMs));
+    final notifier = ref.read(audioPlayerProvider(memoId).notifier);
+
+    return Column(
+      children: [
+        PlaybackWaveform(
+          wave: wave,
+          positionMs: pos,
+          // 波形进度条按裁剪后有效时长绘制。
+          durationMs: dur,
+          // seek 回调统一绝对时间轴坐标（未裁剪时 trimStart 为 0）。
+          onSeek: (ms) => notifier.seekTo(ms + (trimStart ?? 0)),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(MsDateUtils.formatDuration(pos)),
+            Text(MsDateUtils.formatDuration(dur)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 播放控制按钮：只消费低频 playing/looping/speed。
+class _ControlsPanel extends ConsumerWidget {
+  const _ControlsPanel({required this.memoId});
+  final String memoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playing =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.playing));
+    final looping =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.looping));
+    final speed =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.speed));
+    final notifier = ref.read(audioPlayerProvider(memoId).notifier);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          iconSize: 30,
+          icon: Icon(looping ? Icons.repeat_one : Icons.repeat),
+          color: looping ? Theme.of(context).colorScheme.primary : null,
+          onPressed: notifier.toggleLoop,
+        ),
+        const SizedBox(width: 8),
+        FloatingActionButton(
+          onPressed: notifier.toggle,
+          child: Icon(playing ? Icons.pause : Icons.play_arrow),
+        ),
+        const SizedBox(width: 8),
+        PopupMenuButton<double>(
+          icon: Text('${speed}x', style: const TextStyle(fontWeight: FontWeight.w600)),
+          onSelected: notifier.setSpeed,
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 0.75, child: Text('0.75x')),
+            PopupMenuItem(value: 1.0, child: Text('1.0x')),
+            PopupMenuItem(value: 1.25, child: Text('1.25x')),
+            PopupMenuItem(value: 1.5, child: Text('1.5x')),
+            PopupMenuItem(value: 2.0, child: Text('2.0x')),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 裁剪 / 导入字幕按钮（低频）。
+class _TrimButtons extends ConsumerWidget {
+  const _TrimButtons({
+    required this.memoId,
+    required this.fullDurationMs,
+    required this.durationMs,
+    required this.trimStartMs,
+    required this.trimEndMs,
+    required this.onApply,
+  });
+
+  final String memoId;
+  final int fullDurationMs;
+  final int durationMs;
+  final int? trimStartMs;
+  final int? trimEndMs;
+  final Future<void> Function(int? startMs, int? endMs) onApply;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton.icon(
+          onPressed: () => showModalBottomSheet(
+            context: context,
+            showDragHandle: true,
+            // 横屏（高度受限）下允许 sheet 占满全屏并内部滚动。
+            isScrollControlled: true,
+            builder: (_) => SafeArea(
+              child: SingleChildScrollView(
+                child: AudioTrimmer(
+                  memoId: memoId,
+                  // 滑块坐标始终基于文件原始全长。
+                  durationMs: fullDurationMs > 0 ? fullDurationMs : durationMs,
+                  initialStart: trimStartMs,
+                  initialEnd: trimEndMs,
+                  onApply: onApply,
+                ),
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.content_cut),
+          label: const Text('裁剪'),
+        ),
+        TextButton.icon(
+          onPressed: () => _importSubtitle(context, ref),
+          icon: const Icon(Icons.subtitles_outlined),
+          label: const Text('导入字幕'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _importSubtitle(BuildContext context, WidgetRef ref) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['lrc', 'srt', 'txt'],

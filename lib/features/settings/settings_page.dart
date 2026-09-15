@@ -13,6 +13,8 @@ class SettingsPage extends StatelessWidget {
           _section(context, '外观', [
             _tile(context, Icons.palette_outlined, '主题设置',
                 '浅色 / 深色 / 跟随系统、动态取色', '/settings/theme'),
+            _tile(context, Icons.notes_outlined, '文本排版',
+                '行距与段距', '/settings/text'),
           ]),
           _section(context, '内容与存储', [
             _tile(context, Icons.font_download_outlined, '字体管理',

@@ -63,6 +63,10 @@ class PlaybackWaveform extends StatelessWidget {
             onHorizontalDragUpdate: (d) => seekAt(d.localPosition),
             child: CustomPaint(
               size: Size.infinite,
+              // 高频重绘的波形画布：标记 isComplex 让引擎优先隔离其重绘
+              // 区域，避免带动周围（按钮/字幕）一起合成。
+              isComplex: true,
+              willChange: true,
               painter: _WavePainter(
                 wave: wave,
                 progress: durationMs == 0

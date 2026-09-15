@@ -13,8 +13,8 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'getAll') {
         return {
-          'appName': 'MindSpace',
-          'packageName': 'com.aria.mindspace',
+          'appName': 'NekoBox',
+          'packageName': 'aria.neko.box',
           'version': '1.2.3',
           'buildNumber': '42',
         };
@@ -34,7 +34,7 @@ void main() {
     // 等待 PackageInfo.fromPlatform 异步完成后重建。
     await tester.pumpAndSettle();
 
-    expect(find.text('MindSpace'), findsOneWidget);
+    expect(find.text('NekoBox'), findsOneWidget);
     expect(find.text('版本 1.2.3 (42)'), findsOneWidget);
     expect(find.text('咏叹调 Aria'), findsOneWidget);
     expect(find.text('https://linxianlww.github.io/'), findsOneWidget);
