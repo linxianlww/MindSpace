@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../constants/app_constants.dart';
 import '../database/app_database.dart';
 import '../settings/app_settings.dart';
 import '../storage/font_storage.dart';
@@ -84,6 +85,9 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
       paragraphSpacing:
           (_prefs.getDouble(AppSettings.kParagraphSpacing) ?? 10.0)
               .clamp(0.0, 32.0),
+      shareImageWatermarkSuffix:
+          _prefs.getString(AppSettings.kShareImageSuffix) ??
+              AppConstants.defaultShareImageSuffix,
       sortField: _prefs.getString(AppSettings.kSortField) ?? 'updatedAt',
       sortAscending: _prefs.getBool(AppSettings.kSortAsc) ?? false,
     );
@@ -118,6 +122,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     final v = value.clamp(0.0, 32.0);
     state = state.copyWith(paragraphSpacing: v);
     await _prefs.setDouble(AppSettings.kParagraphSpacing, v);
+  }
+
+  Future<void> setShareImageWatermarkSuffix(String value) async {
+    final v = (value.trim().isEmpty)
+        ? AppConstants.defaultShareImageSuffix
+        : value.trim();
+    state = state.copyWith(shareImageWatermarkSuffix: v);
+    await _prefs.setString(AppSettings.kShareImageSuffix, v);
   }
 
   Future<void> setSort(String field, bool ascending) async {

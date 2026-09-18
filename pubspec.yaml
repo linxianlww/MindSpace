@@ -75,6 +75,7 @@ dependencies:
   url_launcher: ^6.3.1
   dynamic_color: ^1.7.0   # Android 12+ 动态取色（Material You）
   intl: ^0.20.2
+  http: ^1.2.0
 
 # 使用本地修补版 pdfrx_engine 0.4.4：
 # 1) 0.4.5+ 经 image^4.8/archive^4 与 excel 锁定的 archive 3 冲突；

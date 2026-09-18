@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/memo_scoped_theme.dart';
 import '../../data/models/memo_type.dart';
 import '../home/home_provider.dart';
 import '../memo_audio/audio_player_page.dart';
 import '../memo_file/file_viewer_page.dart';
 import '../memo_media/media_viewer_page.dart';
-import '../memo_text/text_viewer_page.dart';
+import '../memo_text/text_editor_page.dart';
+import '../memo_todo/todo_edit_page.dart';
+import '../memo_anniversary/anniversary_view_page.dart';
 import '../memo_totp/totp_view_page.dart';
 
 /// 通用查看器：按铭记类型分发到对应详情页。
@@ -27,7 +30,7 @@ class _Dispatcher extends ConsumerWidget {
   Widget _byType(MemoType type) {
     switch (type) {
       case MemoType.text:
-        return TextViewerPage(memoId: memoId);
+        return TextEditorPage(memoId: memoId);
       case MemoType.media:
         return MediaViewerPage(memoId: memoId);
       case MemoType.audio:
@@ -36,13 +39,15 @@ class _Dispatcher extends ConsumerWidget {
         return FileViewerPage(memoId: memoId);
       case MemoType.totp:
         return TotpViewPage(memoId: memoId);
+      case MemoType.todo:
+        return TodoEditPage(memoId: memoId);
+      case MemoType.anniversary:
+        return AnniversaryViewPage(memoId: memoId);
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 各详情页内部自行 watch memoDetail，这里直接按路由已知类型不可得，
-    // 因此先读取一次元数据再分发。
     final memoAsync = ref.watch(memoDetailProvider(memoId));
     return memoAsync.when(
       loading: () => const Scaffold(
@@ -53,7 +58,14 @@ class _Dispatcher extends ConsumerWidget {
         if (memo == null) {
           return const Scaffold(body: Center(child: Text('铭记不存在')));
         }
-        return _byType(memo.type);
+        final brightness = Theme.of(context).brightness;
+        final themed = MemoScopedTheme(
+          colorValue: memo.color,
+          brightness: brightness,
+          useMd3eDualSeed: true,
+          child: _byType(memo.type),
+        );
+        return themed;
       },
     );
   }

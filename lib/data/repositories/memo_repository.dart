@@ -14,6 +14,7 @@ import '../models/media_item.dart';
 import '../models/memo.dart';
 import '../models/memo_type.dart';
 import '../models/subtitle_item.dart';
+import '../../features/memo_todo/todo_model.dart';
 import 'mappers.dart';
 
 /// 铭记仓库：统一维护 Drift 元数据、meta.json 与类型专属内容。
@@ -53,6 +54,17 @@ class MemoRepository {
           found[memo.id] = memo;
         }
       }
+      // 待办铭记的条目存于 content.todo.json，同样需要扫描条目文本。
+      final todoRows =
+          await _db.memos.activeOfType(MemoType.todo.wire);
+      for (final r in todoRows) {
+        if (found.containsKey(r.id)) continue;
+        final memo = Mappers.memoRow(r);
+        final content = await _todoContent(memo);
+        if (content.toLowerCase().contains(kw.toLowerCase())) {
+          found[memo.id] = memo;
+        }
+      }
       final list = found.values.toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       return list;
@@ -88,6 +100,21 @@ class MemoRepository {
     }
     final excerpt = memo.metadata['excerpt'];
     return excerpt is String ? excerpt : '';
+  }
+
+  /// 读取待办铭记的所有条目文本（逐条拼接），用于全文搜索命中条目。
+  Future<String> _todoContent(Memo memo) async {
+    final dir = MindspaceStorage.instance
+        .memoDir(memoId: memo.id, folderId: memo.folderId);
+    final path = p.join(dir, 'content.todo.json');
+    if (!_fs.exists(path)) return '';
+    try {
+      final raw = await _fs.readString(path);
+      final items = TodoItem.listFromJson(raw);
+      return items.map((e) => e.text).join(' ');
+    } catch (_) {
+      return '';
+    }
   }
 
   Stream<List<Memo>> watchTrash() => _db.memos

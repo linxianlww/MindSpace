@@ -48,6 +48,7 @@ class _ShareImagePageState extends ConsumerState<ShareImagePage> {
         ops: ops,
         lineHeight: settings.lineHeight,
         paragraphSpacing: settings.paragraphSpacing,
+        shareSuffix: settings.shareImageWatermarkSuffix,
       );
       if (mounted) setState(() => _bytes = bytes);
     } catch (e) {

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/di/providers.dart';
 
-/// 文本排版：行距与段距（作用于阅读页、编辑器及分享长图排版）。
+/// 文本排版：行距与段距 + 长图水印后缀（分享为图片时显示在长图底部）。
 class TextSettingsPage extends ConsumerWidget {
   const TextSettingsPage({super.key});
 
@@ -68,14 +69,40 @@ class TextSettingsPage extends ConsumerWidget {
                     label: settings.paragraphSpacing.round().toString(),
                     onChanged: (v) => notifier.setParagraphSpacing(v),
                   ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.ios_share_outlined),
+                    title: const Text('分享水印'),
+                    subtitle: Text(
+                      '分享自 ${settings.shareImageWatermarkSuffix}',
+                      style: TextStyle(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    trailing: const Icon(Icons.edit, size: 18),
+                    onTap: () => _editShareSuffix(context, ref),
+                  ),
                 ],
               ),
             ),
           ),
           Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44)),
+              onPressed: () =>
+                  notifier.setShareImageWatermarkSuffix(AppConstants.defaultShareImageSuffix),
+              icon: const Icon(Icons.restart_alt),
+              label: const Text('恢复默认水印（NekoBox）'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
             child: Text(
-              '行距与段距会同步应用到阅读页、编辑器与“分享为图片”生成的长图排版。',
+              '行距与段距同步应用到阅读页、编辑器以及“分享为图片”长图排版。\n'
+              '“分享为图片”的长图底部会显示「分享自 ___」水印后缀。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
@@ -83,19 +110,53 @@ class TextSettingsPage extends ConsumerWidget {
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48)),
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44)),
               onPressed: () {
                 notifier.setLineHeight(1.7);
                 notifier.setParagraphSpacing(10);
+                notifier.setShareImageWatermarkSuffix(
+                    AppConstants.defaultShareImageSuffix);
               },
               icon: const Icon(Icons.restart_alt),
-              label: const Text('恢复默认（行距 1.7 · 段距 10）'),
+              label: const Text('全部恢复默认'),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _editShareSuffix(BuildContext context, WidgetRef ref) async {
+    final current =
+        ref.read(settingsProvider).shareImageWatermarkSuffix;
+    final ctrl = TextEditingController(text: current);
+    final suffix = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('分享水印后缀'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 20,
+          decoration: const InputDecoration(
+            hintText: '将显示在分享长图底部',
+            prefixText: '分享自 ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text),
+              child: const Text('确定')),
+        ],
+      ),
+    );
+    if (suffix != null) {
+      ref.read(settingsProvider.notifier).setShareImageWatermarkSuffix(suffix);
+    }
   }
 }

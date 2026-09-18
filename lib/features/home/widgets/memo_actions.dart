@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/di/providers.dart';
 import '../../../core/storage/mindspace_storage.dart';
@@ -12,8 +13,11 @@ import '../../../core/utils/totp.dart';
 import '../../../data/models/folder.dart';
 import '../../../data/models/memo.dart';
 import '../../../data/models/memo_type.dart';
+import '../../memo_text/widgets/color_picker.dart';
+import '../../memo_todo/todo_model.dart';
 import '../home_provider.dart';
 import '../../share/share_service.dart';
+import '../../memo_anniversary/anniversary_provider.dart';
 import '../../memo_totp/totp_provider.dart';
 
 /// 长按铭记卡片弹出的操作表。
@@ -23,64 +27,104 @@ class MemoActions {
   static Future<void> show(BuildContext context, WidgetRef ref, Memo memo) {
     return showModalBottomSheet(
       context: context,
+      // 弹层高度可能超出屏，强制可滚动（isScrollControlled + SingleChildScrollView）。
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(memo.title,
-                  style: Theme.of(ctx).textTheme.titleMedium),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(ctx).height * 0.85,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(memo.title,
+                      style: Theme.of(ctx).textTheme.titleMedium),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.drive_file_rename_outline),
+                  title: const Text('重命名'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    rename(context, ref, memo);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.palette_outlined,
+                      color: memo.color != null ? Color(memo.color!) : null),
+                  title: Text(memo.color == null ? '设置颜色' : '修改颜色'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setColor(context, ref, memo);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.label_outline,
+                      color: memo.remark != null && memo.color != null
+                          ? Color(memo.color!)
+                          : null),
+                  title: Text(memo.remark == null ? '设置备注标签' : '修改备注标签'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    editRemarkLabel(context, ref, memo);
+                  },
+                ),
+                if (memo.type == MemoType.anniversary)
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('编辑'),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      context.push('/memo/anniversary/${memo.id}/edit');
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.drive_file_move_outline),
+                  title: const Text('移动到文件夹'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    move(context, ref, memo);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.ios_share),
+                  title: const Text('分享'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    share(context, ref, memo);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('查看信息'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    info(context, memo);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline,
+                      color: Theme.of(ctx).colorScheme.error),
+                  title: Text('删除（进入回收站）',
+                      style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await ref.read(memoRepositoryProvider).softDelete(memo.id);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content:
+                                Text('已移入回收站，可在设置中恢复或彻底删除')),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('重命名'),
-              onTap: () {
-                Navigator.pop(ctx);
-                rename(context, ref, memo);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_move_outline),
-              title: const Text('移动到文件夹'),
-              onTap: () {
-                Navigator.pop(ctx);
-                move(context, ref, memo);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.ios_share),
-              title: const Text('分享'),
-              onTap: () {
-                Navigator.pop(ctx);
-                share(context, ref, memo);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('查看信息'),
-              onTap: () {
-                Navigator.pop(ctx);
-                info(context, memo);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete_outline,
-                  color: Theme.of(ctx).colorScheme.error),
-              title: Text('删除（进入回收站）',
-                  style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await ref.read(memoRepositoryProvider).softDelete(memo.id);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('已移入回收站，可在设置中恢复或彻底删除')),
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
@@ -222,7 +266,85 @@ class MemoActions {
             await share.shareFiles(items.map((e) => e.path).toList());
           }
         }
+      case MemoType.todo:
+        // 待办列表：将条目按「☑ / ☐」格式化后分享为纯文本。
+        final path = memo.metadata['filePath'] as String?;
+        if (_safeShareable(path)) {
+          try {
+            final raw = await ref
+                .read(fileSystemDatasourceProvider)
+                .readString(path!);
+            final items = TodoItem.listFromJson(raw);
+            if (items.isNotEmpty) {
+              final sb = StringBuffer('${memo.title}\n');
+              for (final it in items) {
+                sb.writeln('${it.checked ? '☑' : '☐'} ${it.text}');
+              }
+              await share.shareText(sb.toString(), subject: memo.title);
+              return;
+            }
+          } catch (_) {}
+        }
+        await share.shareText(memo.title);
+    case MemoType.anniversary:
+      final cfg = AnniversaryConfig.fromMemo(memo);
+      final calc = computeAnniversary(cfg);
+      final status = calc.isToday
+          ? '就是今天'
+          : (calc.isUpcoming ? '还有 ${calc.count} 天' : '已过 ${calc.absCount} 天');
+      await share.shareText('${memo.title}：$status（${calc.targetLabel}）');
     }
+  }
+
+  /// 修改铭记颜色：弹出颜色选择盘后写入数据库。
+  static Future<void> setColor(BuildContext context, WidgetRef ref, Memo memo) async {
+    final result = await ColorPickerSheet.show(context, current: memo.color);
+    if (result == null) return; // 取消
+    final newColor = result.cleared ? null : result.value;
+    await ref.read(memoRepositoryProvider).setAppearance(memo.id, color: newColor);
+    ref.invalidate(memoDetailProvider(memo.id));
+    ref.invalidate(memoListProvider(memo.folderId));
+  }
+
+  /// 设置 / 修改 / 删除备注标签。
+  static Future<void> editRemarkLabel(
+      BuildContext context, WidgetRef ref, Memo memo) async {
+    final ctrl = TextEditingController(text: memo.remark ?? '');
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('备注标签'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLength: 30,
+          decoration: const InputDecoration(
+            hintText: '输入标签文字（如「重要」「工作」）',
+            prefixIcon: Icon(Icons.label_outline),
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          if (memo.remark != null && memo.remark!.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, ''),
+              child: const Text('删除', style: TextStyle(color: Colors.red)),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+              child: const Text('保存')),
+        ],
+      ),
+    );
+    if (result == null) return;
+    await ref
+        .read(memoRepositoryProvider)
+        .setAppearance(memo.id, remark: result.isEmpty ? null : result);
+    ref.invalidate(memoDetailProvider(memo.id));
+    ref.invalidate(memoListProvider(memo.folderId));
   }
 
   static Future<void> info(BuildContext context, Memo memo) {

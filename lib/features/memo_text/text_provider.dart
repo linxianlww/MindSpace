@@ -84,10 +84,7 @@ class TextEditorNotifier
         }
       } catch (_) {/* 损坏则退回空文档 */}
     } else {
-      // 导入的 txt/md/rtf：以纯文本初始化一次。
       final imported = memo.metadata['filePath'] as String?;
-      // 防越权：只读取应用私有目录内的文件，避免被篡改的 meta 指向
-      // 系统任意路径后泄露内容。
       if (imported != null &&
           storage.isWithinSupport(imported) &&
           fs.exists(imported)) {
@@ -117,13 +114,33 @@ class TextEditorNotifier
       if (match != null) family = await FontLoaderCache.ensure(match);
     }
 
+    // 记录加载时的内容签名，用于 pop 时判断是否需要保存。
+    _initialSignature = jsonEncode(ops);
+    _initialTitle = memo.title;
+
     return TextEditorData(memo: memo, controller: controller, fontFamily: family);
+  }
+
+  /// 加载时的内容签名（delta JSON）。
+  String? _initialSignature;
+  /// 加载时的标题。
+  String? _initialTitle;
+
+  /// 当前内容是否相对加载时发生了变化（内容或标题有实质修改）。
+  bool hasUnsavedChanges() {
+    final cur = state.value;
+    if (cur == null) return false;
+    if (cur.memo.title != (_initialTitle ?? cur.memo.title)) return true;
+    final curSig = jsonEncode(cur.controller.document.toDelta().toJson());
+    return curSig != (_initialSignature ?? curSig);
   }
 
   /// 保存：仅写一份 content.delta.json（富文本唯一正本），不再同时落
   /// markdown / 纯文本副本，避免同一份内容在磁盘上重复占空间。
   /// 需要 Markdown / 纯文本时由 delta 实时转换（分享、导出、搜索）。
   Future<void> save({String? title}) async {
+    // 内容未实质变更则跳过保存，避免仅查看后返回也刷新 updatedAt。
+    if (!hasUnsavedChanges() && title == null) return;
     final cur = state.value;
     if (cur == null) return;
     state = AsyncData(cur.copyWith(saving: true));

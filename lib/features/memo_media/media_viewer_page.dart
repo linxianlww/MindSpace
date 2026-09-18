@@ -51,12 +51,13 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
           appBar: AppBar(
             backgroundColor: Colors.black54,
             foregroundColor: Colors.white,
+            iconTheme: const IconThemeData(color: Colors.white),
             title: Text('${_index + 1}/${items.length}',
                 style: const TextStyle(color: Colors.white)),
             actions: [
               if (item.kind == MediaKind.image) ...[
                 IconButton(
-                  icon: const Icon(Icons.rotate_right),
+                  icon: const Icon(Icons.rotate_right, color: Colors.white),
                   onPressed: () async {
                     await ref
                         .read(mediaControllerProvider)
@@ -65,13 +66,13 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
                   },
                 ),
                 IconButton(
-                  icon: const Icon(Icons.crop),
+                  icon: const Icon(Icons.crop, color: Colors.white),
                   onPressed: () =>
                       ref.read(mediaControllerProvider).crop(item),
                 ),
               ],
               IconButton(
-                icon: const Icon(Icons.label_outline),
+                icon: const Icon(Icons.label_outline, color: Colors.white),
                 onPressed: () async {
                   final r = await MediaRemarkDialog.show(context,
                       initial: item.remark);

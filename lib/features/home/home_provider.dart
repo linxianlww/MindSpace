@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/di/providers.dart';
 import '../../data/models/folder.dart';
@@ -47,3 +50,21 @@ final breadcrumbProvider =
 /// 回收站。
 final trashListProvider = StreamProvider<List<Memo>>(
     (ref) => ref.watch(memoRepositoryProvider).watchTrash());
+
+/// 一言（hitokoto.cn）副标题：仅返回句子正文，失败时返回 null。
+final hitokotoProvider = FutureProvider<String?>((ref) async {
+  try {
+    final resp = await http
+        .get(Uri.parse('https://v1.hitokoto.cn/?c=a&encode=json'))
+        .timeout(const Duration(seconds: 5));
+    if (resp.statusCode == 200) {
+      final data = jsonDecode(resp.body) as Map<String, dynamic>;
+      final text = data['hitokoto'] as String?;
+      if (text == null || text.isEmpty) return null;
+      return text;
+    }
+  } catch (_) {
+    // 网络不可达时静默失败，不显示副标题。
+  }
+  return null;
+});

@@ -11,6 +11,7 @@ class AppSettings {
     this.seedColorValue,
     this.lineHeight = 1.7,
     this.paragraphSpacing = 10,
+    this.shareImageWatermarkSuffix = AppConstants.defaultShareImageSuffix,
     this.sortField = 'updatedAt',
     this.sortAscending = false,
   });
@@ -24,6 +25,9 @@ class AppSettings {
 
   /// 文本阅读/分享长图的段间距（逻辑像素）。
   final double paragraphSpacing;
+
+  /// 长图末尾水印后缀（「分享自 ___」），用户可在「文本排版」设置中自定义。
+  final String shareImageWatermarkSuffix;
 
   final String sortField;
   final bool sortAscending;
@@ -44,6 +48,7 @@ class AppSettings {
     int? Function()? seedColorValue,
     double? lineHeight,
     double? paragraphSpacing,
+    String? shareImageWatermarkSuffix,
     String? sortField,
     bool? sortAscending,
   }) {
@@ -54,6 +59,8 @@ class AppSettings {
           seedColorValue != null ? seedColorValue() : this.seedColorValue,
       lineHeight: lineHeight ?? this.lineHeight,
       paragraphSpacing: paragraphSpacing ?? this.paragraphSpacing,
+      shareImageWatermarkSuffix:
+          shareImageWatermarkSuffix ?? this.shareImageWatermarkSuffix,
       sortField: sortField ?? this.sortField,
       sortAscending: sortAscending ?? this.sortAscending,
     );
@@ -65,6 +72,7 @@ class AppSettings {
   static const kSeed = AppConstants.prefSeedColor;
   static const kLineHeight = AppConstants.prefLineHeight;
   static const kParagraphSpacing = AppConstants.prefParagraphSpacing;
+  static const kShareImageSuffix = AppConstants.prefShareImageSuffix;
   static const kSortField = AppConstants.prefSortField;
   static const kSortAsc = AppConstants.prefSortAsc;
 }

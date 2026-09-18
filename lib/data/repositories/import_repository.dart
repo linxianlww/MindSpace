@@ -111,6 +111,10 @@ class ImportRepository {
         break; // 多图场景走 _importMediaSet
       case MemoType.totp:
         break; // TOTP 不走文件导入（二维码扫码单独入口）
+      case MemoType.todo:
+        break; // 待办不走文件导入（由 FAB 直接新建）
+      case MemoType.anniversary:
+        break; // 纪念日不走文件导入（由 FAB 直接新建）
     }
     return (await _memos.findById(memo.id))!;
   }

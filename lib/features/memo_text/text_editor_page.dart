@@ -68,42 +68,73 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
                 ),
               ),
               actions: [
-                IconButton(
-                  tooltip: '卡片颜色',
-                  icon: Icon(Icons.palette_outlined,
-                      color: memo.color != null ? Color(memo.color!) : null),
-                  onPressed: () async {
-                    final r = await ColorPickerSheet.show(context,
-                        current: memo.color);
-                    // 取消（null）不变更；“清除颜色”与选色都落入 setColor。
-                    if (r != null) {
-                      await ref
-                          .read(textEditorProvider(widget.memoId).notifier)
-                          .setColor(r.value);
-                    }
-                  },
-                ),
-                IconButton(
-                  tooltip: '备注',
-                  icon: const Icon(Icons.label_outline),
-                  onPressed: () async {
-                    final r =
-                        await RemarkEditor.show(context, initial: memo.remark);
-                    if (r != null) {
-                      await ref
-                          .read(textEditorProvider(widget.memoId).notifier)
-                          .setRemark(r.isEmpty ? null : r);
-                    }
-                  },
-                ),
+                // 编辑页右上角只有「更多」三点菜单 + 保存按钮；
+                // 颜色 / 标签 / 字体 / 分享全部收敛至三级菜单。
                 PopupMenuButton<String>(
+                  tooltip: '更多',
                   onSelected: (v) => _menu(v, data),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'font', child: Text('选择字体')),
-                    PopupMenuItem(value: 'share_text', child: Text('分享为文本')),
-                    PopupMenuItem(value: 'share_image', child: Text('分享为图片')),
-                    PopupMenuItem(value: 'share_file', child: Text('分享为文件')),
-                    PopupMenuItem(value: 'preview', child: Text('预览')),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                        value: 'color',
+                        enabled: false,
+                        child: Row(
+                          children: [
+                            Icon(Icons.palette_outlined,
+                                size: 18,
+                                color: memo.color != null
+                                    ? Color(memo.color!)
+                                    : Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 10),
+                            const Text('卡片颜色'),
+                          ],
+                        )),
+                    PopupMenuItem(
+                      value: 'set_color',
+                      onTap: () => WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _setMemoColor(data)),
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 28),
+                        child: Text('修改颜色'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear_color',
+                      enabled: memo.color != null,
+                      onTap: () => WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _clearMemoColor(data)),
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 28),
+                        child: Text('清除颜色'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                        value: 'label',
+                        enabled: false,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.label_outline, size: 18),
+                            const SizedBox(width: 10),
+                            Text(memo.remark == null ? '备注标签' : memo.remark!),
+                          ],
+                        )),
+                    PopupMenuItem(
+                      value: 'edit_label',
+                      onTap: () => WidgetsBinding.instance
+                          .addPostFrameCallback((_) => _editRemark(data)),
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 28),
+                        child: Text(memo.remark == null ? '设置标签' : '修改标签'),
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                        value: 'font', child: Text('字体')),
+                    const PopupMenuItem(
+                        value: 'share_text', child: Text('分享为文本')),
+                    const PopupMenuItem(
+                        value: 'share_image', child: Text('分享为图片')),
+                    const PopupMenuItem(
+                        value: 'share_file', child: Text('分享为文件')),
                   ],
                 ),
                 IconButton(
@@ -164,11 +195,10 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     );
   }
 
-  DefaultStyles? _styles(BuildContext context, String? family,
+  DefaultStyles _styles(BuildContext context, String? family,
       double lineHeight, double paragraphSpacing) {
-    if (family == null) return null;
-    // 自定义样式会整体替换默认段落样式，必须显式保留主题前景色，
-    // 否则浅色模式下文字会退化为未着色（发白）。
+    // 无论是否选择自定义字体，行距与段距都应生效。
+    // 仅当选择自定义字体时才注入 fontFamily。
     final base = TextStyle(
       fontFamily: family,
       fontSize: 16,
@@ -184,6 +214,27 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
         null,
       ),
     );
+  }
+
+  Future<void> _setMemoColor(TextEditorData data) async {
+    final r = await ColorPickerSheet.show(context, current: data.memo.color);
+    if (r == null) return;
+    await ref
+        .read(textEditorProvider(widget.memoId).notifier)
+        .setColor(r.cleared ? null : r.value);
+  }
+
+  Future<void> _clearMemoColor(TextEditorData data) async {
+    await ref.read(textEditorProvider(widget.memoId).notifier).setColor(null);
+  }
+
+  Future<void> _editRemark(TextEditorData data) async {
+    final r = await RemarkEditor.show(context, initial: data.memo.remark);
+    if (r != null) {
+      await ref
+          .read(textEditorProvider(widget.memoId).notifier)
+          .setRemark(r.isEmpty ? null : r);
+    }
   }
 
   Future<void> _textColor(TextEditorData data) async {
@@ -235,8 +286,6 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     switch (value) {
       case 'font':
         _pickFont(data);
-      case 'preview':
-        context.push('/memo/text/${widget.memoId}');
       case 'share_text':
         await _save();
         share.shareText(data.controller.document.toPlainText());

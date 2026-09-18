@@ -19,6 +19,10 @@ void openMemo(BuildContext context, Memo memo) {
       context.push('/memo/file/$id');
     case MemoType.totp:
       context.push('/memo/totp/$id');
+    case MemoType.todo:
+      context.push('/memo/todo/$id');
+    case MemoType.anniversary:
+      context.push('/memo/anniversary/$id');
   }
 }
 
@@ -35,5 +39,9 @@ void openNewMemo(BuildContext context, MemoType type, String id) {
       context.push('/memo/file/$id');
     case MemoType.totp:
       context.push('/memo/totp/$id/edit');
+    case MemoType.todo:
+      context.push('/memo/todo/$id/edit');
+    case MemoType.anniversary:
+      context.push('/memo/anniversary/$id/edit');
   }
 }

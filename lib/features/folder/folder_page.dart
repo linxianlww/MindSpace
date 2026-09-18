@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/di/providers.dart';
 import '../../core/router/memo_nav.dart';
 import '../../core/widgets/state_views.dart';
+import '../../data/models/folder.dart';
 import '../../data/models/memo_type.dart';
 import '../home/home_provider.dart';
 import '../home/widgets/create_fab.dart';
@@ -47,40 +48,16 @@ class FolderPage extends ConsumerWidget {
               subtitle: '通过右下角新建或从外部导入内容',
             );
           }
-          return CustomScrollView(
-            slivers: [
-              folders.maybeWhen(
-                data: (list) => SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 48,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      itemCount: list.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (_, i) => GestureDetector(
-                        onLongPress: () =>
-                            FolderActions.show(context, ref, list[i]),
-                        child: ActionChip(
-                          avatar: const Icon(Icons.folder_outlined, size: 18),
-                          label: Text(list[i].name),
-                          onPressed: () =>
-                              context.push('/folder/${list[i].id}'),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                orElse: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
-              ),
-              SliverToBoxAdapter(
-                child: MemoMasonry(
-                  memos: memoList,
-                  onOpen: (m) => openMemo(context, m),
-                  onLongPress: (m) => MemoActions.show(context, ref, m),
-                ),
-              ),
-            ],
+          final subFolders = folders.valueOrNull ?? const <Folder>[];
+          return SliverToBoxAdapter(
+            child: MemoMasonry(
+              folders: subFolders,
+              memos: memoList,
+              onOpenMemo: (m) => openMemo(context, m),
+              onOpenFolder: (f) => context.push('/folder/${f.id}'),
+              onLongPressMemo: (m) => MemoActions.show(context, ref, m),
+              onLongPressFolder: (f) => FolderActions.show(context, ref, f),
+            ),
           );
         },
       ),
@@ -143,6 +120,16 @@ class FolderPage extends ConsumerWidget {
               final m = await repo.createBlank(MemoType.totp,
                   folderId: folderId);
               if (context.mounted) context.push('/memo/totp/${m.id}/edit');
+            case CreateTarget.todo:
+              final m = await repo.createBlank(MemoType.todo,
+                  folderId: folderId, title: '新待办');
+              if (context.mounted) context.push('/memo/todo/${m.id}/edit');
+            case CreateTarget.anniversary:
+              final m = await repo.createBlank(MemoType.anniversary,
+                  folderId: folderId, title: '新纪念日');
+              if (context.mounted) {
+                context.push('/memo/anniversary/${m.id}/edit');
+              }
           }
         },
       ),

@@ -4,7 +4,9 @@ enum MemoType {
   media('media'),
   audio('audio'),
   file('file'),
-  totp('totp');
+  totp('totp'),
+  todo('todo'),
+  anniversary('anniversary');
 
   const MemoType(this.wire);
 
@@ -18,6 +20,8 @@ enum MemoType {
         MemoType.audio => '音频',
         MemoType.file => '文件',
         MemoType.totp => 'TOTP 验证码',
+        MemoType.todo => '待办',
+        MemoType.anniversary => '纪念日',
       };
 
   static MemoType fromWire(String? value) {

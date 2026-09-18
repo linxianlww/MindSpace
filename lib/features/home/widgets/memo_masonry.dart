@@ -2,26 +2,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../../../core/theme/md3e_tokens.dart';
+import '../../../data/models/folder.dart';
 import '../../../data/models/memo.dart';
+import 'folder_card.dart';
 import 'memo_card.dart';
 
-/// 自适应多列瀑布流：手机双列，宽屏三/四列；卡片高度自适应。
+/// 自适应多列瀑布流：文件夹卡片在前，铭记卡片在后，共享同一网格。
+/// 手机双列，宽屏三/四列；卡片高度自适应。
+/// 文件夹优先排列（视觉上坐落于铭记之上）。
 class MemoMasonry extends StatelessWidget {
   const MemoMasonry({
     super.key,
+    required this.folders,
     required this.memos,
-    required this.onOpen,
-    required this.onLongPress,
+    required this.onOpenMemo,
+    required this.onOpenFolder,
+    required this.onLongPressMemo,
+    required this.onLongPressFolder,
   });
 
+  final List<Folder> folders;
   final List<Memo> memos;
-  final void Function(Memo memo) onOpen;
-  final void Function(Memo memo) onLongPress;
+  final void Function(Memo memo) onOpenMemo;
+  final void Function(Folder folder) onOpenFolder;
+  final void Function(Memo memo) onLongPressMemo;
+  final void Function(Folder folder) onLongPressFolder;
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final columns = Md3eTokens.masonryColumns(width);
+    final total = folders.length + memos.length;
+
     return MasonryGridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -29,13 +41,22 @@ class MemoMasonry extends StatelessWidget {
       crossAxisCount: columns,
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      itemCount: memos.length,
+      itemCount: total,
       itemBuilder: (context, i) {
-        final memo = memos[i];
+        // 文件夹条目排在最前，铭记紧跟其后。
+        if (i < folders.length) {
+          final f = folders[i];
+          return FolderCard(
+            folder: f,
+            onTap: () => onOpenFolder(f),
+            onLongPress: () => onLongPressFolder(f),
+          );
+        }
+        final memo = memos[i - folders.length];
         return MemoCard(
           memo: memo,
-          onTap: () => onOpen(memo),
-          onLongPress: () => onLongPress(memo),
+          onTap: () => onOpenMemo(memo),
+          onLongPress: () => onLongPressMemo(memo),
         );
       },
     );
