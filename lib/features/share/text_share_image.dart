@@ -57,8 +57,9 @@ class TextShareImageRenderer {
   static const double outerMargin = 48;
   static const double contentWidth = canvasWidth - outerMargin * 2;
 
-  /// 防呆：内容过长时截断（过长 PNG 输出可能 OOM）。
-  static const double maxCanvasHeight = 16000;
+  // 防呆上限：逻辑像素。单图物理尺寸≈ 1440×(2×limit)，约 1.6 亿像素；
+  // 足以容纳数千行文本，同时避免失控的 OOM。
+  static const double maxCanvasHeight = 100000;
 
   Future<Uint8List> render() async {
     final blocks = _parse();
@@ -423,7 +424,16 @@ class _Composer {
   }) {
     final tp = _buildParagraphTp(b, isHeader: isHeader, offset: offset, italic: italic);
     final top = y;
-    push(tp.height, (c) => tp.paint(c, Offset(margin + offset, top)));
+    final x = margin + offset;
+    final maxW = contentW - offset;
+    // 外层强行裁剪：即使 TextPainter 测量有问题，像素也绝不会越过
+    // 左侧 x/右侧 x+maxW，杜绝折行后落到右边框外。
+    push(tp.height, (c) {
+      c.save();
+      c.clipRect(Rect.fromLTWH(x, top, maxW, tp.height));
+      tp.paint(c, Offset(x, top));
+      c.restore();
+    });
   }
 
   void _pushQuote(_Block b) {
