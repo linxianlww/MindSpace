@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="NekoBox · MindSpace —— 本地优先、隐私优先的 Android 笔记本应用">
+<meta name="theme-color" content="#07070b">
+<title>NekoBox · MindSpace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent: #ff6b35;
+  --accent-light: #ff9c6e;
+  --accent-warm: #e8523a;
+  --text: #ececf4;
+  --dim: #9394ab;
+  --line: rgba(255, 255, 255, .075);
+  --card: rgba(255, 255, 255, .032);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+}
+
+/* ================= 滚动吸附 ================= */
+html {
+  background: #07070b;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  /* 小屏：靠近整屏才吸附，允许自由滚动看完溢出内容 */
+  scroll-snap-type: y proximity;
+}
+
+/* 空间足够时：严格整屏换页 */
+@media (min-width: 820px) and (min-height: 780px) {
+  html { scroll-snap-type: y mandatory; }
+}
+
+body {
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color: var(--text);
+  background: #07070b;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 关键：clip 只裁切、不创建滚动容器，snap 才能落在 html 上 */
+  overflow-x: clip;
+}
+
+a { color: var(--accent-light); text-decoration: none; }
+
+/* ---------- 背景层 ---------- */
+.bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, #101018 0%, #07070b 70%);
+}
+
+.bg::before {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  background:
+    radial-gradient(48vmax 48vmax at var(--gx1, 24%) var(--gy1, 20%), var(--g1, #ff6b35) 0%, transparent 62%),
+    radial-gradient(42vmax 42vmax at var(--gx2, 76%) var(--gy2, 78%), var(--g2, #7c3aed) 0%, transparent 62%);
+  opacity: .21;
+  transition: opacity .6s ease;
+}
+
+.bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .022) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(ellipse 68% 58% at 50% 48%, #000 0%, transparent 82%);
+  mask-image: radial-gradient(ellipse 68% 58% at 50% 48%, #000 0%, transparent 82%);
+}
+
+/* ---------- 滚动轨道 & 吸附锚点 ---------- */
+.track { position: relative; width: 100%; z-index: 0; }
+
+.snap {
+  width: 100%;
+  height: 100vh;              /* JS 会覆写为精确 px */
+  scroll-snap-align: start;
+  scroll-snap-stop: always;   /* 快速滑动也不跳屏 */
+  pointer-events: none;
+}
+
+/* ---------- 固定舞台 ---------- */
+.stage { position: fixed; inset: 0; z-index: 1; }
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 7vh 26px;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  will-change: opacity, transform;
+}
+
+/* ---------- 通用元素 ---------- */
+.kicker {
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .24em;
+  color: var(--accent-light);
+  margin-bottom: 14px;
+  opacity: .85;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 3.6vw, 2.35rem);
+  font-weight: 700;
+  letter-spacing: -.022em;
+  line-height: 1.22;
+}
+
+.ic {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, rgba(255, 107, 53, .17), rgba(255, 107, 53, .05));
+  border: 1px solid rgba(255, 107, 53, .16);
+  color: var(--accent-light);
+  flex: none;
+}
+.ic svg { width: 21px; height: 21px; }
+
+/* ---------- Hero ---------- */
+.hero { gap: 0; }
+
+.logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 24px;
+  margin-bottom: 26px;
+  object-fit: cover;
+  box-shadow: 0 14px 46px rgba(255, 107, 53, .32), 0 0 0 1px rgba(255, 255, 255, .07);
+}
+
+.hero h1 {
+  font-size: clamp(2.1rem, 7vw, 3.9rem);
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+  background: linear-gradient(128deg, #ffffff 8%, #ffd9c4 42%, var(--accent-light) 68%, var(--accent-warm) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero .lead {
+  margin-top: 20px;
+  font-size: clamp(1rem, 2.1vw, 1.24rem);
+  color: #cdcedd;
+  font-weight: 400;
+}
+
+.hero .sub {
+  margin-top: 12px;
+  max-width: 480px;
+  font-size: clamp(.82rem, 1.6vw, .93rem);
+  color: var(--dim);
+  line-height: 1.75;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 36px;
+  padding: 15px 38px;
+  border-radius: 100px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent), var(--accent-warm));
+  box-shadow: 0 10px 34px rgba(255, 107, 53, .34), inset 0 1px 0 rgba(255, 255, 255, .28);
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease);
+}
+.btn svg { width: 19px; height: 19px; }
+.btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 46px rgba(255, 107, 53, .46), inset 0 1px 0 rgba(255, 255, 255, .3);
+}
+
+.meta {
+  margin-top: 28px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 20px;
+  font-size: .78rem;
+  color: var(--dim);
+}
+.meta span { display: inline-flex; align-items: center; gap: 6px; }
+.meta svg { width: 14px; height: 14px; opacity: .7; }
+
+.hint {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  font-size: .68rem;
+  letter-spacing: .22em;
+  color: rgba(255, 255, 255, .28);
+}
+.hint svg {
+  width: 17px;
+  height: 17px;
+  animation: bob 2s ease-in-out infinite;
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); opacity: .35; }
+  50%      { transform: translateY(6px); opacity: 1; }
+}
+
+/* ---------- 卡片网格 ---------- */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 860px;
+  margin-top: 34px;
+  text-align: left;
+}
+
+.card {
+  padding: 24px 24px 26px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: border-color .35s var(--ease), transform .35s var(--ease), background .35s var(--ease);
+}
+.card:hover {
+  border-color: rgba(255, 107, 53, .32);
+  background: rgba(255, 255, 255, .052);
+  transform: translateY(-4px);
+}
+.card .ic { margin-bottom: 16px; }
+.card h3 {
+  font-size: .98rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+.card p {
+  font-size: .84rem;
+  color: var(--dim);
+  line-height: 1.68;
+}
+
+/* ---------- 三栏（隐私） ---------- */
+.trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 840px;
+  margin-top: 36px;
+  text-align: left;
+}
+.pcard {
+  padding: 26px 22px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: border-color .35s var(--ease), transform .35s var(--ease);
+}
+.pcard:hover { border-color: rgba(16, 185, 129, .3); transform: translateY(-4px); }
+.pcard .ic {
+  background: linear-gradient(140deg, rgba(16, 185, 129, .16), rgba(16, 185, 129, .04));
+  border-color: rgba(16, 185, 129, .16);
+  color: #4ade80;
+  margin-bottom: 16px;
+}
+.pcard h3 { font-size: .98rem; font-weight: 600; margin-bottom: 8px; }
+.pcard p { font-size: .83rem; color: var(--dim); line-height: 1.68; }
+
+.footnote {
+  margin-top: 30px;
+  font-size: .78rem;
+  color: rgba(147, 148, 171, .7);
+}
+
+/* ---------- 规格表 ---------- */
+.specs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  width: 100%;
+  max-width: 820px;
+  margin-top: 36px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--line);
+  text-align: left;
+}
+.spec {
+  background: rgba(9, 9, 14, .82);
+  padding: 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.spec span {
+  font-size: .68rem;
+  letter-spacing: .16em;
+  color: rgba(147, 148, 171, .8);
+}
+.spec strong {
+  font-size: .9rem;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* ---------- 安装步骤 ---------- */
+.steps {
+  list-style: none;
+  width: 100%;
+  max-width: 640px;
+  margin-top: 34px;
+  display: grid;
+  gap: 11px;
+  text-align: left;
+}
+.steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 16px 22px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: border-color .35s var(--ease), transform .35s var(--ease);
+}
+.steps li:hover { border-color: rgba(255, 107, 53, .28); transform: translateX(4px); }
+.num {
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--accent-light);
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+.steps h3 { font-size: .93rem; font-weight: 600; margin-bottom: 3px; }
+.steps p { font-size: .81rem; color: var(--dim); line-height: 1.6; }
+
+/* ---------- FAQ ---------- */
+.faq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 860px;
+  margin-top: 34px;
+  text-align: left;
+}
+.qa {
+  padding: 21px 24px;
+  border-radius: 15px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  transition: border-color .35s var(--ease);
+}
+.qa:hover { border-color: rgba(6, 182, 212, .28); }
+.qa h3 {
+  font-size: .89rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #fff;
+  letter-spacing: -.005em;
+}
+.qa p { font-size: .81rem; color: var(--dim); line-height: 1.7; }
+
+/* ---------- 结尾 ---------- */
+.outro h2 {
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  background: linear-gradient(128deg, #ffffff 15%, #ffd9c4 50%, var(--accent-light) 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.outro .sub {
+  margin-top: 16px;
+  color: var(--dim);
+  font-size: clamp(.84rem, 1.7vw, .95rem);
+}
+
+.foot {
+  margin-top: 46px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 16px;
+  font-size: .76rem;
+  color: rgba(147, 148, 171, .75);
+}
+.foot a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dim);
+  padding: 7px 15px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  transition: all .3s var(--ease);
+}
+.foot a:hover {
+  color: var(--accent-light);
+  border-color: rgba(255, 107, 53, .4);
+  background: rgba(255, 107, 53, .06);
+}
+.foot svg { width: 15px; height: 15px; }
+.foot .sep { opacity: .35; }
+
+/* ---------- 侧边导航 ---------- */
+.dots {
+  position: fixed;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  z-index: 10;
+}
+.dots button {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .18);
+  cursor: pointer;
+  transition: all .4s var(--ease);
+}
+.dots button:hover { background: rgba(255, 255, 255, .42); }
+.dots button.on {
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(255, 107, 53, .9);
+  transform: scale(1.7);
+}
+
+/* ---------- 响应式 ---------- */
+@media (max-height: 720px) {
+  .screen { padding: 4vh 24px; }
+  .logo { width: 66px; height: 66px; margin-bottom: 18px; border-radius: 18px; }
+  .hero .lead { margin-top: 14px; }
+  .btn { margin-top: 26px; padding: 13px 32px; }
+  .meta { margin-top: 20px; }
+  .grid, .trio, .specs, .faq-grid, .steps { margin-top: 22px; }
+  .card { padding: 18px 20px 20px; }
+  .ic { width: 38px; height: 38px; border-radius: 11px; }
+  .ic svg { width: 18px; height: 18px; }
+  .card .ic { margin-bottom: 12px; }
+  .hint { bottom: 18px; }
+}
+
+@media (max-width: 760px) {
+  .screen { padding: 5vh 20px; }
+
+  .grid, .trio, .specs, .faq-grid { grid-template-columns: 1fr; gap: 10px; margin-top: 24px; }
+
+  .card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 15px 17px;
+  }
+  .card .ic { margin-bottom: 0; width: 36px; height: 36px; border-radius: 10px; }
+  .card .ic svg { width: 17px; height: 17px; }
+  .card h3 { font-size: .92rem; margin-bottom: 3px; }
+  .card p { font-size: .78rem; line-height: 1.55; }
+
+  .pcard { padding: 17px; display: flex; gap: 14px; align-items: flex-start; }
+  .pcard .ic { margin-bottom: 0; width: 36px; height: 36px; border-radius: 10px; }
+  .pcard .ic svg { width: 17px; height: 17px; }
+  .pcard h3 { font-size: .92rem; margin-bottom: 3px; }
+  .pcard p { font-size: .78rem; }
+
+  .spec { padding: 12px 18px; }
+  .spec strong { font-size: .84rem; }
+
+  .steps { gap: 8px; }
+  .steps li { padding: 12px 16px; gap: 14px; }
+  .steps h3 { font-size: .87rem; }
+  .steps p { font-size: .76rem; }
+
+  .qa { padding: 15px 18px; }
+  .qa h3 { font-size: .85rem; margin-bottom: 5px; }
+  .qa p { font-size: .77rem; }
+
+  .dots { display: none; }
+  .foot { margin-top: 32px; }
+  .foot .sep { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hint svg { animation: none; }
+  * { transition-duration: .01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg" id="bg"></div>
+<div class="track" id="track"></div>
+
+<nav class="dots" id="dots" aria-label="页面导航"></nav>
+
+<main class="stage" id="stage">
+
+  <!-- ========== 0. Hero ========== -->
+  <section class="screen hero">
+    <img class="logo" src="../icon.png" alt="NekoBox">
+    <div class="kicker">本地优先 · 隐私优先</div>
+    <h1>NekoBox</h1>
+    <p class="lead">你写下的每一个字，都只属于你。</p>
+    <p class="sub">文字、图片、声音、文件 —— 多种铭记方式，<br>全部留在这台设备上。</p>
+
+    <a class="btn" href="https://github.com/linxianlww/mindspace/releases/latest/download/app-release.apk" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载 APK
+    </a>
+
+    <div class="meta">
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        Android 7.0+
+      </span>
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M4.5 4.5l15 15"/></svg>
+        完全离线
+      </span>
+      <span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7.5-3.8 7.5-9.4V5.6L12 2.6 4.5 5.6v6c0 5.6 7.5 9.4 7.5 9.4z"/></svg>
+        开源免费
+      </span>
+    </div>
+
+    <div class="hint">
+      <span>向下滚动</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+  </section>
+
+  <!-- ========== 1. 四类铭记 ========== -->
+  <section class="screen">
+    <div class="kicker">四类铭记</div>
+    <h2>四种方式，记住你想记住的</h2>
+
+    <div class="grid">
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </div>
+        <div>
+          <h3>文本铭记</h3>
+          <p>想怎么写就怎么写。字体、颜色、样式随手可调，也能一键导出图片。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        </div>
+        <div>
+          <h3>媒体集</h3>
+          <p>照片和视频排成整齐的网格，点开就能看，还能添加备注、拖拽排序。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1.5a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0v-7a3 3 0 0 0-3-3z"/><path d="M19 10v1.5a7 7 0 0 1-14 0V10"/><line x1="12" y1="18.5" x2="12" y2="22.5"/><line x1="8" y1="22.5" x2="16" y2="22.5"/></svg>
+        </div>
+        <div>
+          <h3>音频铭记</h3>
+          <p>按下录音，波形随声起伏。想去掉多余的部分？无损裁剪，还能恢复。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6.5A2.5 2.5 0 0 0 4 4.5v15A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div>
+          <h3>文件铭记</h3>
+          <p>PDF、Word、Excel 都能直接打开阅读，其他格式也能交给系统应用处理。</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ========== 2. 细节 ========== -->
+  <section class="screen">
+    <div class="kicker">细节</div>
+    <h2>还有一些顺手的小设计</h2>
+
+    <div class="grid">
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s7.5-3.8 7.5-9.4V5.6L12 2.6 4.5 5.6v6c0 5.6 7.5 9.4 7.5 9.4z"/><polyline points="9 11.6 11.2 13.8 15.2 9.8"/></svg>
+        </div>
+        <div>
+          <h3>动态验证码</h3>
+          <p>扫码导入一次，之后离线生成动态验证码，兼容主流验证器应用。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        </div>
+        <div>
+          <h3>主题个性化</h3>
+          <p>跟随系统取色，或挑一个你喜欢的种子色，整个界面随之变化。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <h3>文件夹管理</h3>
+          <p>无限层级嵌套，拖拽整理，删错了还能从回收站里找回来。</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12.5" x2="14" y2="12.5"/></svg>
+        </div>
+        <div>
+          <h3>一键备份</h3>
+          <p>把所有内容打包成一个压缩文件，换手机时原样搬过去。</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ========== 3. 隐私 ========== -->
+  <section class="screen">
+    <div class="kicker">隐私</div>
+    <h2>没有服务器，就没有泄露</h2>
+
+    <div class="trio">
+      <div class="pcard">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><line x1="4.6" y1="4.6" x2="19.4" y2="19.4"/></svg>
+        </div>
+        <div>
+          <h3>不联网</h3>
+          <p>应用没有任何必须网络请求，飞行模式下也能完整使用。</p>
+        </div>
+      </div>
+
+      <div class="pcard">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 4.5 5.6v6c0 5.6 7.5 9.4 7.5 9.4s7.5-3.8 7.5-9.4v-6z"/><path d="M12 11v4"/><circle cx="12" cy="8.4" r=".6" fill="currentColor"/></svg>
+        </div>
+        <div>
+          <h3>不上传</h3>
+          <p>内容保存在应用私有目录，只有你和这台手机能看到。</p>
+        </div>
+      </div>
+
+      <div class="pcard">
+        <div class="ic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="21" x2="21" y2="3"/></svg>
+        </div>
+        <div>
+          <h3>不追踪</h3>
+          <p>没有账号，没有统计，没有广告，也没有后台进程。</p>
+        </div>
+      </div>
+    </div>
+
+    <p class="footnote">数据都存在本机，卸载之前记得先做一份备份。</p>
+  </section>
+
+  <!-- ========== 4. 兼容性 ========== -->
+  <section class="screen">
+    <div class="kicker">兼容性</div>
+    <h2>我的手机能用吗？</h2>
+
+    <div class="specs">
+      <div class="spec">
+        <span>系统版本</span>
+        <strong>Android 7.0 及以上</strong>
+      </div>
+      <div class="spec">
+        <span>适用机型</span>
+        <strong>2018 年之后的安卓手机基本都支持</strong>
+      </div>
+      <div class="spec">
+        <span>存储空间</span>
+        <strong>建议预留 100 MB 以上</strong>
+      </div>
+      <div class="spec">
+        <span>权限</span>
+        <strong>只在录音时申请麦克风，文件通过系统选择器读取</strong>
+      </div>
+      <div class="spec">
+        <span>网络</span>
+        <strong>完全不强制联网</strong>
+      </div>
+      <div class="spec">
+        <span>开源许可</span>
+        <strong>AGPL-3.0 · 自由开源软件</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 5. 安装 ========== -->
+  <section class="screen">
+    <div class="kicker">安装</div>
+    <h2>四步就能装好</h2>
+
+    <ol class="steps">
+      <li>
+        <span class="num">01</span>
+        <div>
+          <h3>下载安装包</h3>
+          <p>点击页面上的下载按钮，把 APK 文件保存到手机。</p>
+        </div>
+      </li>
+      <li>
+        <span class="num">02</span>
+        <div>
+          <h3>找到并打开</h3>
+          <p>在通知栏或文件管理器里找到它，轻轻点一下。</p>
+        </div>
+      </li>
+      <li>
+        <span class="num">03</span>
+        <div>
+          <h3>允许本次安装</h3>
+          <p>如果系统提示「未知来源」，按引导允许这一次即可。</p>
+        </div>
+      </li>
+      <li>
+        <span class="num">04</span>
+        <div>
+          <h3>完成</h3>
+          <p>安装结束后，桌面上就会出现 NekoBox 的图标。</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ========== 6. FAQ ========== -->
+  <section class="screen">
+    <div class="kicker">常见问题</div>
+    <h2>你可能想问的</h2>
+
+    <div class="faq-grid">
+      <div class="qa">
+        <h3>我的内容会被上传吗？</h3>
+        <p>不会。应用完全不联网，所有内容只存在你自己的手机上。</p>
+      </div>
+      <div class="qa">
+        <h3>换手机了怎么搬过去？</h3>
+        <p>在「设置 → 备份与恢复」里导出压缩包，在新手机上恢复即可。</p>
+      </div>
+      <div class="qa">
+        <h3>内容能导出到别处吗？</h3>
+        <p>可以。文本能导出 Markdown，其他文件也可以直接分享出去。</p>
+      </div>
+      <div class="qa">
+        <h3>有想法想反馈？</h3>
+        <p>欢迎到 GitHub 上提建议，每一条我们都会认真看。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 7. 结尾 ========== -->
+  <section class="screen outro">
+    <h2>现在，开始记住吧</h2>
+    <p class="sub">免费、开源、不打扰 —— 属于你自己的那一小块空间。</p>
+
+    <a class="btn" href="https://github.com/linxianlww/mindspace/releases/latest/download/app-release.apk" download>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      下载 APK
+    </a>
+
+    <div class="foot">
+      <a href="https://github.com/linxianlww/mindspace" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+      <span class="sep">·</span>
+      <span>AGPL-3.0</span>
+      <span class="sep">·</span>
+      <span>© 2026 linxianlww</span>
+    </div>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  const screens = Array.from(document.querySelectorAll('.screen'));
+  const track   = document.getElementById('track');
+  const bg      = document.getElementById('bg');
+  const dotsBox = document.getElementById('dots');
+  const N       = screens.length;
+
+  /* 每屏背景色对 */
+  const palettes = [
+    ['#ff6b35', '#7c3aed'],
+    ['#ff7a45', '#2563eb'],
+    ['#a855f7', '#ff6b35'],
+    ['#10b981', '#0ea5e9'],
+    ['#f59e0b', '#8b5cf6'],
+    ['#ff6b35', '#e11d48'],
+    ['#06b6d4', '#a855f7'],
+    ['#ff6b35', '#ff2d55']
+  ];
+
+  /* ---------- 生成吸附锚点（与 screen 一一对应） ---------- */
+  const snaps = screens.map(() => {
+    const s = document.createElement('div');
+    s.className = 'snap';
+    track.appendChild(s);
+    return s;
+  });
+
+  /* ---------- 生成侧边导航点 ---------- */
+  screens.forEach((_, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('aria-label', '第 ' + (i + 1) + ' 页');
+    b.addEventListener('click', () => {
+      window.scrollTo({ top: i * vh, behavior: 'smooth' });
+    });
+    dotsBox.appendChild(b);
+  });
+  const dots = Array.from(dotsBox.children);
+
+  const hex2rgb = h => [
+    parseInt(h.slice(1, 3), 16),
+    parseInt(h.slice(3, 5), 16),
+    parseInt(h.slice(5, 7), 16)
+  ];
+  const mix = (a, b, t) => [
+    Math.round(a[0] + (b[0] - a[0]) * t),
+    Math.round(a[1] + (b[1] - a[1]) * t),
+    Math.round(a[2] + (b[2] - a[2]) * t)
+  ];
+
+  let vh = window.innerHeight;
+  let lastW = window.innerWidth;
+
+  function resize(force) {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    /* 移动端地址栏收放只改变高度，忽略小幅抖动，避免页面跳动 */
+    if (!force && w === lastW && Math.abs(h - vh) < 120) return;
+
+    lastW = w;
+    vh = h;
+
+    /* 轨道总高 = N 屏；每个锚点 = 1 屏 */
+    track.style.height = (N * vh) + 'px';
+    snaps.forEach(s => { s.style.height = vh + 'px'; });
+  }
+
+  function render(p) {
+    /* —— 原地换页 —— */
+    for (let i = 0; i < N; i++) {
+      const d = p - i;
+      const t = Math.max(-1, Math.min(1, d * 2));
+      const o = 1 - Math.abs(t);
+      const el = screens[i];
+      el.style.opacity = o;
+      el.style.transform = 'translate3d(0,' + (t * 56).toFixed(2) + 'px,0)';
+      el.style.visibility = o < 0.004 ? 'hidden' : 'visible';
+      el.style.pointerEvents = o > 0.75 ? 'auto' : 'none';
+    }
+
+    /* —— 背景光晕插值 —— */
+    const ci = Math.max(0, Math.min(N - 1, Math.floor(p)));
+    const cf = Math.max(0, Math.min(1, p - ci));
+    const A = palettes[ci];
+    const B = palettes[Math.min(N - 1, ci + 1)];
+    const c1 = mix(hex2rgb(A[0]), hex2rgb(B[0]), cf);
+    const c2 = mix(hex2rgb(A[1]), hex2rgb(B[1]), cf);
+
+    bg.style.setProperty('--g1', 'rgb(' + c1.join(',') + ')');
+    bg.style.setProperty('--g2', 'rgb(' + c2.join(',') + ')');
+    bg.style.setProperty('--gx1', (24 + Math.sin(p * 0.85) * 16).toFixed(1) + '%');
+    bg.style.setProperty('--gy1', (20 + Math.cos(p * 0.62) * 14).toFixed(1) + '%');
+    bg.style.setProperty('--gx2', (76 + Math.cos(p * 0.73) * 15).toFixed(1) + '%');
+    bg.style.setProperty('--gy2', (78 + Math.sin(p * 1.05) * 13).toFixed(1) + '%');
+
+    /* —— 导航点 —— */
+    const active = Math.round(p);
+    for (let i = 0; i < N; i++) {
+      dots[i].classList.toggle('on', i === active);
+    }
+  }
+
+  /* —— 平滑跟随 —— */
+  let cur = window.scrollY / vh;
+
+  function tick() {
+    const target = window.scrollY / vh;
+    cur += (target - cur) * 0.17;
+    if (Math.abs(target - cur) < 0.0008) cur = target;
+    render(cur);
+    requestAnimationFrame(tick);
+  }
+
+  window.addEventListener('resize', () => resize(false), { passive: true });
+  window.addEventListener('orientationchange', () => setTimeout(() => resize(true), 150));
+
+  resize(true);
+  render(cur);
+  requestAnimationFrame(tick);
+})();
+</script>
+
+</body>
+</html>
