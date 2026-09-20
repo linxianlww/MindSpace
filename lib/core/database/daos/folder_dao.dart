@@ -34,10 +34,17 @@ class FolderDao extends DatabaseAccessor<AppDatabase>
   }
 
   /// 自上而下的祖先链（用于面包屑）。
+  /// 包含循环引用检测和最大深度限制。
   Future<List<FolderRow>> ancestorChain(String? startId) async {
     final result = <FolderRow>[];
+    final visited = <String>{};
     var current = startId;
+    const maxDepth = 100; // 最大深度限制
     while (current != null) {
+      // 循环引用检测：如果已访问过该节点，说明存在环
+      if (!visited.add(current)) break;
+      // 深度限制保护
+      if (result.length >= maxDepth) break;
       final node = await getById(current);
       if (node == null) break;
       result.insert(0, node);
@@ -71,10 +78,47 @@ class FolderDao extends DatabaseAccessor<AppDatabase>
     );
   }
 
+  /// 级联软删除文件夹及其所有后代子文件夹。
+  Future<void> softDeleteWithChildren(String id, int at) {
+    return transaction(() async {
+      // 先软删除当前文件夹
+      await softDelete(id, at);
+      // 递归软删除所有后代子文件夹
+      var children = await (select(folderRows)
+            ..where((t) => t.parentId.equals(id) & t.deletedAt.isNull()))
+          .get();
+      while (children.isNotEmpty) {
+        final nextIds = <String>[];
+        for (final c in children) {
+          await softDelete(c.id, at);
+          nextIds.add(c.id);
+        }
+        children = await (select(folderRows)
+              ..where((t) => t.parentId.isIn(nextIds) & t.deletedAt.isNull()))
+            .get();
+      }
+    });
+  }
+
   Future<void> restore(String id) {
     return (update(folderRows)..where((t) => t.id.equals(id))).write(
       const FolderRowsCompanion(deletedAt: Value(null)),
     );
+  }
+
+  /// 级联恢复文件夹及其所有祖先文件夹（确保父路径可用）。
+  Future<void> restoreWithAncestors(String id) {
+    return transaction(() async {
+      // 收集所有需要恢复的祖先节点
+      final ancestors = await ancestorChain(id);
+      for (final node in ancestors) {
+        if (node.deletedAt != null) {
+          await restore(node.id);
+        }
+      }
+      // 恢复当前节点
+      await restore(id);
+    });
   }
 
   Future<void> hardDelete(String id) {

@@ -65,26 +65,30 @@ class FolderActions {
   static Future<void> _rename(
       BuildContext context, WidgetRef ref, Folder f) async {
     final ctrl = TextEditingController(text: f.name);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重命名文件夹'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入新名称'),
+    try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('重命名文件夹'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '输入新名称'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('确定')),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('确定')),
-        ],
-      ),
-    );
-    if (result != null && result.isNotEmpty && result != f.name) {
-      await ref.read(folderRepositoryProvider).rename(f.id, result);
+      );
+      if (result != null && result.isNotEmpty && result != f.name) {
+        await ref.read(folderRepositoryProvider).rename(f.id, result);
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 

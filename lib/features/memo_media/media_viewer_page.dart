@@ -7,6 +7,8 @@ import 'package:photo_view/photo_view.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../data/models/memo_type.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
+import '../home/home_provider.dart';
 import 'media_provider.dart';
 import 'widgets/media_remark_dialog.dart';
 
@@ -36,6 +38,7 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(mediaItemsProvider(widget.memoId));
+    final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
     return async.when(
       loading: () =>
           const Scaffold(backgroundColor: Colors.black, body: SizedBox.shrink()),
@@ -80,6 +83,16 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
                     await ref
                         .read(mediaControllerProvider)
                         .setRemark(item, r.isEmpty ? null : r);
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.add_to_home_screen, color: Colors.white),
+                tooltip: '添加到桌面',
+                onPressed: () {
+                  final memo = memoAsync.value;
+                  if (memo != null) {
+                    addMemoToDesktop(context, ref, memo);
                   }
                 },
               ),

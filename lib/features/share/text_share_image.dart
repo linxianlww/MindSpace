@@ -110,7 +110,10 @@ class TextShareImageRenderer {
     final picture = recorder.endRecording();
     final img = await picture.toImage(physicalW, physicalH);
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
-    return data!.buffer.asUint8List();
+    if (data == null) {
+      throw Exception('长图渲染失败：无法生成图片数据');
+    }
+    return data.buffer.asUint8List();
   }
 
   // ———————————— delta 解析（把 quill ops 转成块模型）————————————

@@ -81,7 +81,7 @@ class FolderPage extends ConsumerWidget {
                         child: const Text('创建')),
                   ],
                 ),
-              );
+              ).whenComplete(() => ctrl.dispose());
               if (name != null && name.isNotEmpty) {
                 await ref
                     .read(folderRepositoryProvider)

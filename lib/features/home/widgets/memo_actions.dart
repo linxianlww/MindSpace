@@ -15,6 +15,7 @@ import '../../../data/models/memo.dart';
 import '../../../data/models/memo_type.dart';
 import '../../memo_text/widgets/color_picker.dart';
 import '../../memo_todo/todo_model.dart';
+import '../../desktop_shortcut/add_to_desktop.dart';
 import '../home_provider.dart';
 import '../../share/share_service.dart';
 import '../../memo_anniversary/anniversary_provider.dart';
@@ -97,6 +98,14 @@ class MemoActions {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.add_to_home_screen),
+                  title: const Text('添加到桌面'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    addMemoToDesktop(context, ref, memo);
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.info_outline),
                   title: const Text('查看信息'),
                   onTap: () {
@@ -133,29 +142,33 @@ class MemoActions {
   static Future<void> rename(
       BuildContext context, WidgetRef ref, Memo memo) async {
     final ctrl = TextEditingController(text: memo.title);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重命名'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: '输入新标题'),
+    try {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('重命名'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: '输入新标题'),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('确定')),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('确定')),
-        ],
-      ),
-    );
-    if (result != null && result.isNotEmpty && result != memo.title) {
-      await ref.read(memoRepositoryProvider).rename(memo.id, result);
-      // 详情 provider 是普通 FutureProvider 非流式，改名后必须显式失效，
-      // 否则详情页/音频页标题仍显示旧名称。
-      ref.invalidate(memoDetailProvider(memo.id));
+      );
+      if (result != null && result.isNotEmpty && result != memo.title) {
+        await ref.read(memoRepositoryProvider).rename(memo.id, result);
+        // 详情 provider 是普通 FutureProvider 非流式，改名后必须显式失效，
+        // 否则详情页/音频页标题仍显示旧名称。
+        ref.invalidate(memoDetailProvider(memo.id));
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 
@@ -310,41 +323,45 @@ class MemoActions {
   static Future<void> editRemarkLabel(
       BuildContext context, WidgetRef ref, Memo memo) async {
     final ctrl = TextEditingController(text: memo.remark ?? '');
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('备注标签'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLength: 30,
-          decoration: const InputDecoration(
-            hintText: '输入标签文字（如「重要」「工作」）',
-            prefixIcon: Icon(Icons.label_outline),
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          if (memo.remark != null && memo.remark!.isNotEmpty)
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, ''),
-              child: const Text('删除', style: TextStyle(color: Colors.red)),
+    try {
+      final result = await showDialog<String?>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('备注标签'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            maxLength: 30,
+            decoration: const InputDecoration(
+              hintText: '输入标签文字（如「重要」「工作」）',
+              prefixIcon: Icon(Icons.label_outline),
+              border: OutlineInputBorder(),
             ),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('保存')),
-        ],
-      ),
-    );
-    if (result == null) return;
-    await ref
-        .read(memoRepositoryProvider)
-        .setAppearance(memo.id, remark: result.isEmpty ? null : result);
-    ref.invalidate(memoDetailProvider(memo.id));
-    ref.invalidate(memoListProvider(memo.folderId));
+          ),
+          actions: [
+            if (memo.remark != null && memo.remark!.isNotEmpty)
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, ''),
+                child: const Text('删除', style: TextStyle(color: Colors.red)),
+              ),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('保存')),
+          ],
+        ),
+      );
+      if (result == null) return;
+      await ref
+          .read(memoRepositoryProvider)
+          .setAppearance(memo.id, remark: result.isEmpty ? null : result);
+      ref.invalidate(memoDetailProvider(memo.id));
+      ref.invalidate(memoListProvider(memo.folderId));
+    } finally {
+      ctrl.dispose();
+    }
   }
 
   static Future<void> info(BuildContext context, Memo memo) {

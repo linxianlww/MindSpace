@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/di/providers.dart';
 import '../../core/utils/uuid_utils.dart';
 import '../../data/models/memo.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
 import '../memo_text/widgets/color_picker.dart';
 import '../memo_text/widgets/remark_editor.dart';
 import 'todo_model.dart';
@@ -154,6 +155,11 @@ class _TodoEditPageState extends ConsumerState<TodoEditPage> {
                     await _save();
                     if (context.mounted) context.pop();
                   },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add_to_home_screen),
+                  tooltip: '添加到桌面',
+                  onPressed: () => addMemoToDesktop(context, ref, memo),
                 ),
               ],
             ),

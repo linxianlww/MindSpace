@@ -69,8 +69,8 @@ class LunarUtils {
     0x0d520,
   ];
 
-  static final DateTime _gregorianEpoch =
-      DateTime.utc(1900, 1, 31); // 农历 1900 年正月初一的公历日期
+  /// 公历 1900 年正月初一（农历 epoch），使用本地时间以避免时区偏移问题。
+  static final DateTime _gregorianEpoch = DateTime(1900, 1, 31);
 
   // ———————————— 基础查询 ————————————
 
@@ -106,10 +106,16 @@ class LunarUtils {
 
   // ignore: unused_element
   static LunarDate solarToLunar(DateTime solar) {
+    // 统一使用 UTC 时间计算偏移量，避免时区影响
     final base = _gregorianEpoch;
+    final utcSolar = DateTime.utc(solar.year, solar.month, solar.day);
     int offset =
-        (solar.millisecondsSinceEpoch - base.millisecondsSinceEpoch) ~/
+        (utcSolar.millisecondsSinceEpoch - base.millisecondsSinceEpoch) ~/
             86400000;
+
+    if (offset < 0) {
+      throw ArgumentError('不支持早于 1900-01-31 的公历日期');
+    }
 
     // 年
     int year = 1900;

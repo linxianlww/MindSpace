@@ -42,6 +42,7 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(mediaItemRows, mediaItemRows.thumbPath);
           }
         },
+        // 注意：当前 drift 版本不支持 onDowngrade，降级会默认抛出异常
         beforeOpen: (details) async {
           // 打开时启用外键级联（SQLite 默认关闭）。
           await customStatement('PRAGMA foreign_keys = ON');

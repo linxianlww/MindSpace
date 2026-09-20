@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/file_types.dart';
 import '../../../core/di/providers.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
 import '../../../core/utils/ms_date_utils.dart';
 import '../../../core/utils/subtitle_parser.dart';
 import '../../../core/utils/uuid_utils.dart';
@@ -42,6 +43,16 @@ class AudioPlayerPage extends ConsumerWidget {
               final path = m?.metadata['originalPath'] as String?;
               if (path != null) {
                 ref.read(shareServiceProvider).shareFile(path);
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_to_home_screen),
+            tooltip: '添加到桌面',
+            onPressed: () {
+              final m = memoAsync.value;
+              if (m != null) {
+                addMemoToDesktop(context, ref, m);
               }
             },
           ),

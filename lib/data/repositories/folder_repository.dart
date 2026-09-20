@@ -63,14 +63,48 @@ class FolderRepository {
   Future<void> move(String id, String? newParentId) =>
       _db.folders.move(id, newParentId, MsDateUtils.nowMs());
 
-  /// 软删除文件夹，并把其下铭记一并软删除（可在回收站恢复）。
+  /// 软删除文件夹及其子文件夹，并把其下铭记一并软删除（可在回收站恢复）。
   Future<void> softDelete(String id) async {
     final now = MsDateUtils.nowMs();
-    await _db.folders.softDelete(id, now);
-    await _db.memos.softDeleteInFolder(id, now);
+    // 获取所有需要级联软删除的文件夹 ID
+    final folders = await _db.folders.allFolders();
+    final folderMap = {for (final f in folders) f.id: f};
+    
+    // 收集所有后代文件夹 ID
+    final toDelete = <String>{};
+    void collectChildren(String parentId) {
+      for (final f in folders) {
+        if (f.parentId == parentId && !toDelete.contains(f.id)) {
+          toDelete.add(f.id);
+          collectChildren(f.id);
+        }
+      }
+    }
+    
+    if (folderMap.containsKey(id)) {
+      toDelete.add(id);
+      collectChildren(id);
+    }
+    
+    // 级联软删除所有相关文件夹
+    for (final folderId in toDelete) {
+      await _db.folders.softDelete(folderId, now);
+      await _db.memos.softDeleteInFolder(folderId, now);
+    }
   }
 
-  Future<void> restore(String id) => _db.folders.restore(id);
+  /// 恢复文件夹及其祖先文件夹（确保父路径可用）。
+  Future<void> restore(String id) async {
+    // 恢复当前文件夹
+    await _db.folders.restore(id);
+    // 恢复所有祖先节点（如果已被删除）
+    final ancestors = await _db.folders.ancestorChain(id);
+    for (final node in ancestors) {
+      if (node.deletedAt != null) {
+        await _db.folders.restore(node.id);
+      }
+    }
+  }
 
   /// 彻底删除：数据库记录 + 磁盘目录。
   Future<void> hardDelete(String id) async {

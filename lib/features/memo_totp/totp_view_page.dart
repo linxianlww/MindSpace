@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
 import '../../core/utils/totp.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
 import '../../../data/models/memo.dart';
 import '../home/home_provider.dart';
 import '../memo_text/widgets/color_picker.dart';
@@ -150,6 +151,18 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
                       }
                     }),
                     child: const Text('编辑设置'),
+                  ),
+                  PopupMenuItem(
+                    value: 'desktop_shortcut',
+                    onTap: () => WidgetsBinding.instance
+                        .addPostFrameCallback((_) => addMemoToDesktop(context, ref, memo)),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.add_to_home_screen, size: 18),
+                        SizedBox(width: 10),
+                        Text('添加到桌面'),
+                      ],
+                    ),
                   ),
                 ],
               ),

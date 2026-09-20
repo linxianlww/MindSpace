@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/di/providers.dart';
 import 'core/router/app_router.dart';
+import 'core/share/share_receiver_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/md3e_tokens.dart';
 import 'core/utils/app_logger.dart';
+import 'features/desktop_shortcut/desktop_shortcut_service.dart';
 import 'features/memo_media/media_provider.dart';
 
 /// 应用根组件：主题（动态取色 / 种子色）+ 路由。
@@ -30,7 +32,37 @@ class _NekoBoxAppState extends ConsumerState<NekoBoxApp> {
         appLogger.w('启动缩略图修复失败', e);
         return 0;
       });
+
+      // 启动分享接收器：连接 Android native MethodChannel/EventChannel
+      // 冷启动场景下 getInitialShare 会被 Event+MethodChannel 双通道触发；
+      // 热启动（onNewIntent）由 EventChannel 推送。
+      try {
+        ref.read(shareReceiverServiceProvider).start();
+      } catch (e) {
+        appLogger.w('ShareReceiver 启动失败', e);
+      }
+
+      // 处理桌面快捷方式 deep link 启动：若由快捷图标打开，直接跳转到对应铭记。
+      _handleInitialDeepLink();
     });
+  }
+
+  Future<void> _handleInitialDeepLink() async {
+    try {
+      final uri = await DesktopShortcutService.getInitialDeepLink();
+      if (uri == null || !mounted) return;
+      final route = DesktopShortcutService.parseDeepLinkToRoute(uri);
+      if (route != null) {
+        // 延迟一跳，确保根路由已就位
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          // 使用 GoRouter 的 go() 替换根路由（contextless API）
+          ref.read(appRouterProvider).go(route);
+        }
+      }
+    } catch (e) {
+      appLogger.w('桌面快捷方式 deep link 处理失败', e);
+    }
   }
 
   @override

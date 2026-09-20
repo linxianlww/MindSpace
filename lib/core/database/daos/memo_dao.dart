@@ -43,13 +43,21 @@ class MemoDao extends DatabaseAccessor<AppDatabase> with _$MemoDaoMixin {
   }
 
   /// 全文搜索（标题/备注，简单 LIKE 实现，纯本地）。
+  /// 对 LIKE 通配符进行转义，避免用户输入 % 或 _ 导致搜索结果异常。
   Stream<List<MemoRow>> watchSearch(String keyword) {
-    final like = '%$keyword%';
+    final trimmed = keyword.trim();
+    if (trimmed.isEmpty) return Stream.value([]);
+    // 转义 LIKE 特殊字符：\ % _
+    final escaped = trimmed
+        .replaceAll('\\', '\\\\')
+        .replaceAll('%', '\\%')
+        .replaceAll('_', '\\_');
+    final like = '%$escaped%';
     final q = select(memoRows)
       ..where((t) =>
           t.deletedAt.isNull() &
           (t.title.like(like) | t.remark.like(like)))
-      ..orderBy([(t) => OrderingTerm(expression: t.updatedAt)]);
+      ..orderBy([(t) => OrderingTerm(expression: t.updatedAt, mode: OrderingMode.desc)]);
     return q.watch();
   }
 
@@ -79,12 +87,12 @@ class MemoDao extends DatabaseAccessor<AppDatabase> with _$MemoDaoMixin {
     );
   }
 
-  Future<void> updateAppearance(String id, {int? color, String? remark}) {
+  Future<void> updateAppearance(String id, int updatedAt, {int? color, String? remark}) {
     return (update(memoRows)..where((t) => t.id.equals(id))).write(
       MemoRowsCompanion(
         color: Value(color),
         remark: Value(remark),
-        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        updatedAt: Value(updatedAt),
       ),
     );
   }

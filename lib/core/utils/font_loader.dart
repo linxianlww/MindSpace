@@ -18,13 +18,24 @@ class FontLoaderCache {
     if (_loaded.contains(family)) return family;
     final prev = _loading[family];
     if (prev != null) {
-      await prev;
-      return family;
+      try {
+        await prev;
+      } catch (_) {
+        // 清除失败的 Future，允许后续重试
+        _loading.remove(family);
+      }
+      if (_loaded.contains(family)) return family;
     }
     final future = _load(font.path, family);
     _loading[family] = future;
-    await future;
-    _loaded.add(family);
+    try {
+      await future;
+      _loaded.add(family);
+    } catch (_) {
+      // 失败时移除 loading 条目，允许后续重试
+      _loading.remove(family);
+      rethrow;
+    }
     return family;
   }
 

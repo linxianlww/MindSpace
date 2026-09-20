@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../../../core/widgets/state_views.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
 import '../home/home_provider.dart';
 import 'file_provider.dart';
 import 'office_viewer_page.dart';
@@ -21,6 +22,18 @@ class FileViewerPage extends ConsumerWidget {
       appBar: AppBar(
         title: Text(memoAsync.maybeWhen(
             data: (m) => m?.title ?? '文件', orElse: () => '文件')),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_to_home_screen),
+            tooltip: '添加到桌面',
+            onPressed: () {
+              final m = memoAsync.value;
+              if (m != null) {
+                addMemoToDesktop(context, ref, m);
+              }
+            },
+          ),
+        ],
       ),
       body: memoAsync.when(
         loading: () => const LoadingState(),

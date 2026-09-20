@@ -299,6 +299,6 @@ context.push('/memo/anniversary/${m.id}/edit');
               child: const Text('创建')),
         ],
       ),
-    );
+    ).whenComplete(() => ctrl.dispose());
   }
 }

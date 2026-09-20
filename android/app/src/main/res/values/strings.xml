@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用启动器标签 -->
+    <string name="app_name">NekoBox</string>
+    <!-- 文本选择浮动栏菜单项 -->
+    <string name="save_as_memo">保存为铭记</string>
+</resources>

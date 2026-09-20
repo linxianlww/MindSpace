@@ -172,7 +172,7 @@ class MemoRepository {
   }
 
   Future<void> setAppearance(String id, {int? color, String? remark}) =>
-      _db.memos.updateAppearance(id, color: color, remark: remark);
+      _db.memos.updateAppearance(id, MsDateUtils.nowMs(), color: color, remark: remark);
 
   /// 仅刷新类型专属元数据（如时长、页数、波形等）。
   Future<void> updateMetadata(

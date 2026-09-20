@@ -25,6 +25,6 @@ class MediaRemarkDialog {
           ),
         ],
       ),
-    );
+    ).whenComplete(() => ctrl.dispose());
   }
 }

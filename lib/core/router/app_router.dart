@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/desktop_shortcut/desktop_shortcut_service.dart';
 import '../../features/folder/folder_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/memo_anniversary/anniversary_edit_page.dart';
@@ -33,6 +34,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     observers: [rootRouteObserver],
     initialLocation: '/',
+    // 直接支持桌面快捷方式的 deep link（Android 原生已拦截，
+    // 这里兜底保证 GoRouter 不误报 unknown route）。
+    redirect: (context, state) {
+      final uri = state.uri;
+      if (uri.scheme == 'nekobox') {
+        final route = DesktopShortcutService.parseDeepLinkToRoute(uri.toString());
+        if (route != null) return route;
+      }
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/',

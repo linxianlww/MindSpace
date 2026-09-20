@@ -16,8 +16,16 @@
         android:enableOnBackInvokedCallback="true">
         <!-- largeHeap：Android 8.x 低配机位图/GL 内存预算紧张，大图查看、
              PDF 渲染、图片旋转/裁剪等重任务需要更多堆空间，否则直接 OOM 崩溃。 -->
+        <!--
+            MainActivity：主启动入口 + 所有分享接收 / otpauth / 文本选择的汇聚点。
+            单一 Activity 接收所有 intent，按 action/mimeType 在 Flutter 侧分流处理：
+            PROCESS_TEXT → 文本铭记；SEND(SINGLE) → 按类型创建对应铭记；
+            SEND_MULTIPLE → 媒体集（图片/视频）；VIEW(otpauth)→ TOTP 铭记。
+            所有铭记默认保存到根目录（folderId = null）。
+        -->
         <activity
             android:name=".MainActivity"
+            android:label="@string/app_name"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -32,6 +40,83 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- 文本选择菜单：长按选中文本后出现在系统「复制/粘贴」浮动栏 -->
+            <!-- android:label 即为菜单项文本 -->
+            <intent-filter android:label="@string/save_as_memo">
+                <action android:name="android.intent.action.PROCESS_TEXT"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+
+            <!-- 分享接收：文本 / txt / markdown / rtf → 文本铭记 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/x-markdown"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/rtf"/>
+            </intent-filter>
+
+            <!-- 分享接收：图片 / 视频（复数）→ 媒体集 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+
+            <!-- 分享接收：音频（单文件）→ 音频铭记 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="audio/*"/>
+            </intent-filter>
+
+            <!-- 分享接收：通用文件（office、pdf、未知）→ 文件铭记 -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/*"/>
+            </intent-filter>
+
+            <!-- 打开链接：otpauth:// TOTP → TOTP 铭记 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="otpauth"/>
+            </intent-filter>
+
+            <!-- 桌面快捷方式 deep link：nekobox://memo/{type}/{id} → 打开对应铭记 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="nekobox" android:host="memo"/>
             </intent-filter>
         </activity>
         <meta-data

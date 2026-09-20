@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
 import '../../core/utils/markdown_delta.dart';
+import '../desktop_shortcut/add_to_desktop.dart';
 import '../share/share_service.dart';
 import 'text_provider.dart';
 import 'widgets/color_picker.dart';
@@ -135,6 +136,18 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
                         value: 'share_image', child: Text('分享为图片')),
                     const PopupMenuItem(
                         value: 'share_file', child: Text('分享为文件')),
+                    PopupMenuItem(
+                      value: 'desktop_shortcut',
+                      onTap: () => WidgetsBinding.instance
+                          .addPostFrameCallback((_) => addMemoToDesktop(context, ref, memo)),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.add_to_home_screen, size: 18),
+                          SizedBox(width: 10),
+                          Text('添加到桌面'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
                 IconButton(
@@ -260,24 +273,28 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
 
   Future<void> _rename(TextEditorData data) async {
     final ctrl = TextEditingController(text: data.memo.title);
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('重命名'),
-        content: TextField(controller: ctrl, autofocus: true),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('确定')),
-        ],
-      ),
-    );
-    if (name != null && name.isNotEmpty) {
-      await ref
-          .read(textEditorProvider(widget.memoId).notifier)
-          .save(title: name);
+    try {
+      final name = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('重命名'),
+          content: TextField(controller: ctrl, autofocus: true),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                child: const Text('确定')),
+          ],
+        ),
+      );
+      if (name != null && name.isNotEmpty) {
+        await ref
+            .read(textEditorProvider(widget.memoId).notifier)
+            .save(title: name);
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 

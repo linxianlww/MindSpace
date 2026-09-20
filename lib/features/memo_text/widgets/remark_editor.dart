@@ -25,6 +25,6 @@ class RemarkEditor {
           ),
         ],
       ),
-    );
+    ).whenComplete(() => ctrl.dispose());
   }
 }
