@@ -14,7 +14,46 @@ class MemoDao extends DatabaseAccessor<AppDatabase> with _$MemoDaoMixin {
   static const Set<String> sortableFields = {'createdAt', 'updatedAt', 'title'};
 
   /// 监听某文件夹下的铭记（folderId=null 为根）。
+  ///
+  /// 始终排除私密空间根目录下的铭记；私密空间内的铭记仅在已解锁时由
+  /// [watchPrivateFolder] 暴露。
   Stream<List<MemoRow>> watchByFolder(
+    String? folderId, {
+    bool includeDeleted = false,
+    String sortField = 'updatedAt',
+    bool ascending = false,
+  }) {
+    const privateSpaceId = '__private_space__';
+    final q = select(memoRows)
+      ..where((t) {
+        final inFolder = t.folderId.equalsNullable(folderId);
+        final base = includeDeleted ? inFolder : inFolder & t.deletedAt.isNull();
+        // NULL-safe：排除 folderId = privateSpaceId，但保留 folderId IS NULL（根目录铭记）。
+        // `equalsNullable(x).not()` 在 folderId 为 NULL 时返回 UNKNOWN（被过滤掉），
+        // 所以需要 OR folderId IS NULL 显式保留根级铭记。
+        final hidePrivate = t.folderId.isNull() |
+            t.folderId.isNotIn([privateSpaceId]);
+        return base & hidePrivate;
+      });
+    final field = sortableFields.contains(sortField) ? sortField : 'updatedAt';
+    q.orderBy([
+      (t) {
+        final mode = ascending ? OrderingMode.asc : OrderingMode.desc;
+        switch (field) {
+          case 'createdAt':
+            return OrderingTerm(expression: t.createdAt, mode: mode);
+          case 'title':
+            return OrderingTerm(expression: t.title, mode: mode);
+          default:
+            return OrderingTerm(expression: t.updatedAt, mode: mode);
+        }
+      },
+    ]);
+    return q.watch();
+  }
+
+  /// 监听私密空间文件夹下的铭记（仅内部使用，需 PIN 验证后调用）。
+  Stream<List<MemoRow>> watchPrivateFolder(
     String? folderId, {
     bool includeDeleted = false,
     String sortField = 'updatedAt',
@@ -23,7 +62,9 @@ class MemoDao extends DatabaseAccessor<AppDatabase> with _$MemoDaoMixin {
     final q = select(memoRows)
       ..where((t) {
         final inFolder = t.folderId.equalsNullable(folderId);
-        return includeDeleted ? inFolder : inFolder & t.deletedAt.isNull();
+        final base = includeDeleted ? inFolder : inFolder & t.deletedAt.isNull();
+        // 私密空间根文件夹：此时 equalsNullable 也匹配 __private_space__
+        return base;
       });
     final field = sortableFields.contains(sortField) ? sortField : 'updatedAt';
     q.orderBy([

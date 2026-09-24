@@ -13,10 +13,14 @@ class MarkdownDelta {
     var orderedIndex = 0;
 
     void flushLine(Map<String, dynamic> blockAttrs) {
-      final prefix = _blockPrefix(blockAttrs, orderedIndex: orderedIndex + 1);
+      // 有序列表行级前缀编号+1：无论块级属性附着于同一个 op（text+\n）
+      // 还是独立的 \n op，均在此统一计数并递增，保证两种 Delta 模式下
+      // 编号都是从 1 开始且逐行累加。
+      final idx = blockAttrs['list'] == 'ordered' ? orderedIndex + 1 : orderedIndex;
+      final prefix = _blockPrefix(blockAttrs, orderedIndex: idx);
       buf.write('$prefix$line\n');
       line.clear();
-      orderedIndex = 0;
+      if (blockAttrs['list'] == 'ordered') orderedIndex++;
     }
 
     for (final op in ops) {
@@ -31,12 +35,13 @@ class MarkdownDelta {
         final isLineEnd = i < segments.length - 1;
         if (seg.isNotEmpty) {
           line.write(_inline(seg, attrs));
-          if (attrs['list'] == 'ordered') orderedIndex++;
         }
         if (isLineEnd) flushLine(attrs);
       }
     }
-    if (line.isNotEmpty) buf.write(line); // 末尾没有换行符的残余文本
+    // 末尾没有换行符的残余文本：当文档以块级列表项结束时（无尾部换行），
+    // 也需补上块级前缀（如 "1. 最后一项"），否则首行前缀会丢失。
+    if (line.isNotEmpty) buf.write(line);
     return buf.toString().trim();
   }
 

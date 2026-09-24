@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/di/providers.dart';
+import '../../../core/settings/private_space_service.dart';
+import '../../../core/widgets/pin_input_dialog.dart';
 import '../../../data/models/folder.dart';
+import '../home_provider.dart';
 
 /// 长按文件夹弹出的操作表（与 MemoActions 对应）。
 class FolderActions {
@@ -39,6 +42,15 @@ class FolderActions {
                   _move(context, ref, f);
                 },
               ),
+              if (f.id != kPrivateSpaceFolderId)
+                ListTile(
+                  leading: const Icon(Icons.lock_outline),
+                  title: const Text('移动到私密空间'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _moveToPrivateSpace(context, ref, f);
+                  },
+                ),
               ListTile(
                 leading: Icon(Icons.delete_outline,
                     color: Theme.of(ctx).colorScheme.error),
@@ -127,6 +139,92 @@ class FolderActions {
           ],
         ),
       ),
+    );
+  }
+
+  /// 移动文件夹到私密空间：需要 PIN 验证。
+  static Future<void> _moveToPrivateSpace(
+      BuildContext context, WidgetRef ref, Folder f) async {
+    final PrivateSpaceService service =
+        ref.read(privateSpaceServiceProvider);
+
+    // 确保私密空间文件夹存在
+    await ref.read(folderRepositoryProvider).ensurePrivateSpaceFolder();
+
+    // 未设置 PIN：引导创建
+    if (!service.hasPin) {
+      if (!context.mounted) return;
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('创建 PIN 码'),
+          content: const Text(
+              '私密空间需要 PIN 码保护。是否现在创建？\n\n创建后该文件夹将被移动到私密空间。'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消')),
+            FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('创建')),
+          ],
+        ),
+      );
+      if (confirmed != true || !context.mounted) return;
+
+      await showPinInputDialog(
+        context: context,
+        mode: PinDialogMode.create,
+        onCreated: (pin) async {
+          await service.setPin(pin);
+          await ref
+              .read(folderRepositoryProvider)
+              .move(f.id, kPrivateSpaceFolderId);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已移动到私密空间并解锁')),
+            );
+            ref.invalidate(folderListProvider(f.parentId));
+          }
+        },
+      );
+      return;
+    }
+
+    // 已设置 PIN：验证
+    if (!context.mounted) return;
+
+    await showPinInputDialog(
+      context: context,
+      mode: PinDialogMode.verify,
+      biometricEnabled: service.canCheckBiometrics && service.biometricEnabled,
+      onBiometricTap: () async {
+        final ok = await service.unlockWithBiometric();
+        if (ok && context.mounted) {
+          Navigator.of(context).pop();
+          await ref
+              .read(folderRepositoryProvider)
+              .move(f.id, kPrivateSpaceFolderId);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已移动到私密空间')),
+          );
+          ref.invalidate(folderListProvider(f.parentId));
+        }
+      },
+      onVerify: (pin) async {
+        final ok = await service.unlock(pin);
+        if (ok && context.mounted) {
+          await ref
+              .read(folderRepositoryProvider)
+              .move(f.id, kPrivateSpaceFolderId);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('已移动到私密空间')),
+          );
+          ref.invalidate(folderListProvider(f.parentId));
+        }
+        return ok;
+      },
     );
   }
 }

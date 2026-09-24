@@ -135,3 +135,72 @@ go_router 集中声明（`core/router/app_router.dart`），页面转场为共�
 - `android/app/build.gradle.kts` 中 `ndk.abiFilters += "arm64-v8a"`，splits 仅打 arm64；
   release：`flutter build apk --release --target-platform android-arm64`。
 - 所有原生插件均选用提供 arm64-v8a 产物的库，不引入仅 x86 的依赖。
+
+## 10. 桌面小组件（纯原生方案）
+
+### 10.1 架构概览
+
+MindSpace 提供 4 个桌面小组件，全部采用纯 Android 原生方案（无 Glance / 无 home_widget 包）：
+
+| 小组件 | 尺寸 | 说明 |
+|---|---|---|
+| 快捷操作 | 2×1 | 新建文本铭记 / 添加待办 - 按钮 |
+| 铭记列表 | 4×3 | 选定文件夹下的铭记标题列表 |
+| 待办列表 | 4×3 | 待办铭记的条目，支持勾选切换 |
+| 媒体轮播 | 3×2 | 媒体集的图片轮播展示 |
+
+### 10.2 技术栈
+
+- **布局**：XML 布局文件（`res/layout/*.xml`）
+- **渲染**：`android.widget.RemoteViews`（传统小组件方案）
+- **数据持久化**：`SharedPreferences("HomeWidgetPreferences")`
+- **通信方式**：原生 `MethodChannel` + `EventChannel`（无第三方 Flutter 包依赖）
+
+### 10.3 通信链路
+
+```
+Flutter ──MethodChannel("neko.box/widget")──▶ MainActivity (Kotlin)
+                                                    │
+                                                    ▼
+                                        SharedPreferences("HomeWidgetPreferences")
+                                                    │
+                                                    ▼
+                                        AppWidgetProvider.onUpdate 读取
+                                                    │
+                                                    ▼
+                                        RemoteViews 渲染桌面小组件
+
+小组件点击 ──Intent(ACTION_VIEW, nekobox://widget/…)──▶ MainActivity
+                                                            │
+                            EventChannel("neko.box/widget/events")
+                                                            │
+                                                            ▼
+                                                        Flutter 端路由
+```
+
+### 10.4 关键文件
+
+| 文件 | 职责 |
+|---|---|
+| `MainActivity.kt` | 原生通道处理：MethodChannel（数据写入/读取）+ EventChannel（点击事件推送） |
+| `NativeWidgetProvider.kt` | 各类小组件 Provider（QuickActions / MemoryList / TodoList / MediaCarousel） |
+| `TodoToggleReceiver.kt` | 待办勾选切换广播接收器（原生实现，无需 Flutter） |
+| `WidgetConfigureActivity.kt` | 小组件配置 Activity：Flutter 配置页面宿主 |
+| `native_home_widget_service.dart` | Flutter 侧原生桥接服务（替代原 `home_widget` 包） |
+| `home_widget_service.dart` | 业务层：同步铭记/待办/媒体数据到小组件 |
+| `widget_configure_main.dart` | 配置页 Flutter 入口（独立 isolate） |
+
+### 10.5 数据流
+
+1. **数据同步**（Flutter → Native）：
+   - `NativeHomeWidgetService.saveWidgetData(key, value)` → MethodChannel → Kotlin 写入 SharedPreferences
+   - `NativeHomeWidgetService.updateWidget(className)` → MethodChannel → Kotlin 发送 APPWIDGET_UPDATE 广播
+
+2. **用户交互**（Native → Flutter）：
+   - 小组件点击产生 Intent（`ACTION_VIEW + nekobox://widget/...`）→ MainActivity
+   - 冷启动：URI 暂存，Flutter 通过 `initialWidgetUri()` 取走
+   - 热启动：通过 EventChannel 实时推送 URI 给 Flutter
+
+3. **待办勾选**：
+   - `TodoToggleReceiver` 直接读写 SharedPreferences 并刷新 widget
+   - 不需要经过 Flutter（纯原生处理，响应更快）

@@ -23,6 +23,8 @@ class SettingsPage extends StatelessWidget {
                 '占用统计、清理缓存、回收站', '/settings/storage'),
             _tile(context, Icons.backup_outlined, '备份与恢复',
                 '导出 / 导入 zip 备份', '/settings/backup'),
+            _tile(context, Icons.lock_outline, '私密空间',
+                'PIN 码与生物识别解锁设置', '/settings/private_space'),
           ]),
           _section(context, '关于', [
             // 需求 7.2 指定入口。

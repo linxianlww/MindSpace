@@ -19,6 +19,7 @@ class MemoMasonry extends StatelessWidget {
     required this.onOpenFolder,
     required this.onLongPressMemo,
     required this.onLongPressFolder,
+    this.privateSpaceEntry,
   });
 
   final List<Folder> folders;
@@ -28,37 +29,46 @@ class MemoMasonry extends StatelessWidget {
   final void Function(Memo memo) onLongPressMemo;
   final void Function(Folder folder) onLongPressFolder;
 
+  /// 私密空间入口（仅根目录渲染）。
+  final Widget? privateSpaceEntry;
+
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final columns = Md3eTokens.masonryColumns(width);
     final total = folders.length + memos.length;
 
-    return MasonryGridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
-      crossAxisCount: columns,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      itemCount: total,
-      itemBuilder: (context, i) {
-        // 文件夹条目排在最前，铭记紧跟其后。
-        if (i < folders.length) {
-          final f = folders[i];
-          return FolderCard(
-            folder: f,
-            onTap: () => onOpenFolder(f),
-            onLongPress: () => onLongPressFolder(f),
-          );
-        }
-        final memo = memos[i - folders.length];
-        return MemoCard(
-          memo: memo,
-          onTap: () => onOpenMemo(memo),
-          onLongPress: () => onLongPressMemo(memo),
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (privateSpaceEntry != null) privateSpaceEntry!,
+        MasonryGridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+          crossAxisCount: columns,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          itemCount: total,
+          itemBuilder: (context, i) {
+            // 文件夹条目排在最前，铭记紧跟其后。
+            if (i < folders.length) {
+              final f = folders[i];
+              return FolderCard(
+                folder: f,
+                onTap: () => onOpenFolder(f),
+                onLongPress: () => onLongPressFolder(f),
+              );
+            }
+            final memo = memos[i - folders.length];
+            return MemoCard(
+              memo: memo,
+              onTap: () => onOpenMemo(memo),
+              onLongPress: () => onLongPressMemo(memo),
+            );
+          },
+        ),
+      ],
     );
   }
 }

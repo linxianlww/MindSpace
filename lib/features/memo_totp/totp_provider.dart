@@ -22,9 +22,14 @@ TotpConfig? totpConfigOf(Memo memo) {
   final m = memo.metadata;
   final secret = m[TotpKeys.secret] as String?;
   if (secret == null || secret.trim().isEmpty) return null;
-  int intOf(String key, int def) {
+  // 安全解析：范围外的值（含 0）回退默认，避免 TOTP 生成期触发除零崩溃。
+  int intOf(String key, int def, {int min = 1}) {
     final v = m[key];
-    return v is num ? v.toInt() : def;
+    if (v is num) {
+      final n = v.toInt();
+      return n >= min ? n : def;
+    }
+    return def;
   }
 
   return TotpConfig(
@@ -32,7 +37,7 @@ TotpConfig? totpConfigOf(Memo memo) {
     issuer: (m[TotpKeys.issuer] as String?) ?? '',
     account: (m[TotpKeys.account] as String?) ?? '',
     period: intOf(TotpKeys.period, 30),
-    digits: intOf(TotpKeys.digits, 6),
+    digits: intOf(TotpKeys.digits, 6, min: 4),
     algorithm: (m[TotpKeys.algorithm] as String?) ?? 'SHA1',
   );
 }

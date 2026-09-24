@@ -1,10 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 仅在“音频铭记-录音”时动态申请；不申请存储根目录权限，媒体走系统 Photo Picker。 -->
+    <!-- 仅在"音频铭记-录音"时动态申请；不申请存储根目录权限，媒体走系统 Photo Picker。 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- TOTP 扫码导入（mobile_scanner）；仅在前台使用相机时动态申请。 -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- 私密空间：指纹 / 面容解锁 -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <uses-feature android:name="android.hardware.fingerprint" android:required="false"/>
     <!-- 纯本地优先应用，不需要联网权限。 -->
+    <!-- 媒体轮播小组件使用 setInexactRepeating（非精确闹钟），无需 SCHEDULE_EXACT_ALARM 权限。 -->
 
     <application
         android:label="NekoBox"
@@ -117,6 +121,181 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="nekobox" android:host="memo"/>
+            </intent-filter>
+
+            <!-- 小组件交互回调 deep link：nekobox://widget/... → 打开 app 并分流处理 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="nekobox" android:host="widget"/>
+            </intent-filter>
+        </activity>
+
+        <!-- 私密空间分享接收方：在系统分享表中以「保存到私密空间」身份出现；
+             收到 ACTION_SEND 后转发给 MainActivity，并注入 targetFolderId = __private_space__
+             （主 Activity 解析分享时通过 ShareReceiverHelper.targetFolderId(event) 写入 map，
+              Dart 侧 getInitialShare 读取后按字段分流）。-->
+        <activity
+            android:name=".ShareReceiverActivity"
+            android:label="@string/save_to_private_space"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/x-markdown"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/rtf"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="audio/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="image/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="video/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="otpauth"/>
+            </intent-filter>
+        </activity>
+
+        <!-- ========== 桌面小组件（原生方案：AppWidgetProvider + XML 布局）========== -->
+
+        <!-- 快捷操作小组件 2x1 -->
+        <receiver
+            android:name=".widget.QuickActionsWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_actions_widget_info" />
+        </receiver>
+
+        <!-- 铭记列表小组件 4x3 -->
+        <receiver
+            android:name=".widget.MemoryListWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/memory_list_widget_info" />
+        </receiver>
+
+        <!-- 待办事项列表小组件 4x3 -->
+        <receiver
+            android:name=".widget.TodoListWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_list_widget_info" />
+        </receiver>
+
+        <!-- 媒体集轮播小组件 3x2 -->
+        <receiver
+            android:name=".widget.MediaCarouselWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/media_carousel_widget_info" />
+        </receiver>
+
+        <!-- 待办勾选切换广播接收器 -->
+        <receiver
+            android:name=".widget.TodoToggleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="aria.neko.box.widget.TOGGLE_TODO_V2" />
+            </intent-filter>
+        </receiver>
+
+
+        <!-- 小组件配置 Activity（供系统 AppWidgetHost 显示 Flutter 配置界面） -->
+        <activity
+            android:name=".widget.MemoryListWidgetConfigureActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".widget.TodoListWidgetConfigureActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".widget.MediaCarouselWidgetConfigureActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
         <meta-data

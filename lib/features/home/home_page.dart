@@ -7,7 +7,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/di/providers.dart';
 import '../../core/router/app_router.dart';
 import '../../core/router/memo_nav.dart';
+import '../../core/settings/private_space_service.dart';
 import '../../core/theme/md3e_tokens.dart';
+import '../../core/utils/app_logger.dart';
+import '../../core/widgets/pin_input_dialog.dart';
 import '../../core/widgets/state_views.dart';
 import '../../data/models/folder.dart';
 import '../../data/models/memo_type.dart';
@@ -35,6 +38,23 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
   final _fabKey = GlobalKey<CreateFabState>();
 
   @override
+  void initState() {
+    super.initState();
+    // 私密空间：离开 __private_space__ 文件夹导航到其他地方 → 自动锁定会话
+    ref.listenManual<String?>(currentFolderIdProvider, (previous, next) {
+      if (previous == kPrivateSpaceFolderId && next != kPrivateSpaceFolderId) {
+        final service = ref.read(privateSpaceServiceProvider);
+        if (service.sessionUnlocked) {
+          appLogger.i('私密空间：导航离开私密空间 → 锁定');
+          service.lock();
+        }
+      }
+      // 更新 previousFolderId（供后续可能使用）
+      ref.read(previousFolderIdProvider.notifier).state = previous;
+    });
+  }
+
+  @override
   void dispose() {
     rootRouteObserver.unsubscribe(this);
     _searchCtrl.dispose();
@@ -55,6 +75,13 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
     }
     _searchCtrl.clear();
     ref.read(searchKeywordProvider.notifier).state = '';
+  }
+
+  @override
+  void didPushNext() {
+    // 从主界面跳转到其它页面（编辑器、设置等）时，立即收起 FAB overlay，
+    // 避免 overlay 残留在新页面上，或因 TickerMode 被暂停导致动画卡住。
+    _fabKey.currentState?.forceClose();
   }
 
   @override
@@ -138,7 +165,9 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                 ),
                 data: (memos) {
                   final folders = foldersAsync.valueOrNull ?? const <Folder>[];
-                  if (memos.isEmpty && folders.isEmpty) {
+                  // 仅在根目录显示私密空间入口
+                  final showPrivateSpace = folderId == null;
+                  if (memos.isEmpty && folders.isEmpty && !showPrivateSpace) {
                     return const SliverFillRemaining(
                       hasScrollBody: false,
                       child: EmptyState(
@@ -160,6 +189,9 @@ class _HomePageState extends ConsumerState<HomePage> with RouteAware {
                           () => MemoActions.show(context, ref, m)),
                       onLongPressFolder: (f) => _openSheet(
                           () => FolderActions.show(context, ref, f)),
+                      privateSpaceEntry: showPrivateSpace
+                          ? _buildPrivateSpaceEntry(context, ref)
+                          : null,
                     ),
                   );
                 },
@@ -300,5 +332,154 @@ context.push('/memo/anniversary/${m.id}/edit');
         ],
       ),
     ).whenComplete(() => ctrl.dispose());
+  }
+
+  // —————————————— 私密空间入口 ——————————————
+
+  /// 构建私密空间入口卡片（在主页瀑布流中以特殊样式呈现）。
+  Widget _buildPrivateSpaceEntry(BuildContext context, WidgetRef ref) {
+    return _PrivateSpaceEntryCard(
+      onTap: () => _onPrivateSpaceTap(context, ref),
+    );
+  }
+
+  Future<void> _onPrivateSpaceTap(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(privateSpaceServiceProvider);
+
+    // 未设置 PIN：引导创建
+    if (!service.hasPin) {
+      final folderCreated = await _ensurePrivateSpaceFolder(ref);
+      if (!folderCreated && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法创建私密空间文件夹')),
+        );
+        return;
+      }
+      await _promptCreatePin(context, service);
+      return;
+    }
+
+    // 已解锁：直接进入私密空间
+    if (service.sessionUnlocked) {
+      if (context.mounted) {
+        ref.read(currentFolderIdProvider.notifier).state =
+            kPrivateSpaceFolderId;
+      }
+      return;
+    }
+
+    // 已锁定：需要 PIN/生物识别解锁
+    await _promptUnlock(context, ref, service);
+  }
+
+  Future<bool> _ensurePrivateSpaceFolder(WidgetRef ref) async {
+    try {
+      await ref.read(folderRepositoryProvider).ensurePrivateSpaceFolder();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _promptCreatePin(
+      BuildContext context, PrivateSpaceService service) async {
+    await showPinInputDialog(
+      context: context,
+      mode: PinDialogMode.create,
+      onCreated: (pin) async {
+        await service.setPin(pin);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('私密空间已创建并解锁')),
+          );
+          // 自动进入私密空间
+          ref.read(currentFolderIdProvider.notifier).state =
+              kPrivateSpaceFolderId;
+        }
+      },
+    );
+  }
+
+  Future<void> _promptUnlock(BuildContext context, WidgetRef ref,
+      PrivateSpaceService service) async {
+    await showPinInputDialog(
+      context: context,
+      mode: PinDialogMode.verify,
+      biometricEnabled:
+          service.canCheckBiometrics && service.biometricEnabled,
+      onBiometricTap: () async {
+        final ok = await service.unlockWithBiometric();
+        if (ok && context.mounted) {
+          Navigator.of(context).pop();
+          ref.read(currentFolderIdProvider.notifier).state =
+              kPrivateSpaceFolderId;
+        }
+      },
+      onVerify: (pin) async {
+        final ok = await service.unlock(pin);
+        if (ok && context.mounted) {
+          ref.read(currentFolderIdProvider.notifier).state =
+              kPrivateSpaceFolderId;
+        }
+        return ok;
+      },
+    );
+  }
+}
+
+/// 私密空间入口卡片：在主页中以特殊样式呈现。
+class _PrivateSpaceEntryCard extends StatelessWidget {
+  const _PrivateSpaceEntryCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Material(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(Md3eTokens.radiusCard),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Md3eTokens.radiusCard),
+          side: BorderSide(color: scheme.outlineVariant, width: 1),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Md3eTokens.radiusCard),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: scheme.tertiaryContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(Icons.lock_outline,
+                      color: scheme.onTertiaryContainer, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    '私密空间',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: scheme.outline),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

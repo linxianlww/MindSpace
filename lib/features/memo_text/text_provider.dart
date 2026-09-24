@@ -179,6 +179,9 @@ class TextEditorNotifier
       },
     );
     final saved = await ref.read(memoRepositoryProvider).save(next);
+    // 保存成功后更新签名基准，避免下次返回时误判为仍有未保存的变更
+    //（否则仅查看后返回也会刷新 updatedAt）。
+    _initialSignature = jsonEncode(ops);
     state = AsyncData(cur.copyWith(memo: saved, saving: false));
   }
 

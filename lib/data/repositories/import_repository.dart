@@ -128,36 +128,43 @@ class ImportRepository {
       title: '媒体集 ${MsDateUtils.format(MsDateUtils.nowMs())}',
     );
     String? firstThumb;
-    for (var i = 0; i < sources.length; i++) {
-      final source = sources[i];
-      final placed = await _service.placeFile(
-        sourcePath: source,
-        memoId: memo.id,
-        folderId: folderId,
-        subDir: MemoSubDir.assets,
-      );
-      final kind = FileTypes.mediaKindOf(source);
-      int? w;
-      int? h;
-      String? thumb;
-      if (kind == MediaKind.image) {
-        final size = await _service.readImageSize(placed);
-        w = size?.width;
-        h = size?.height;
-        thumb = await _service.generateImageThumb(placed, memo.id);
-        firstThumb ??= thumb;
+    try {
+      for (var i = 0; i < sources.length; i++) {
+        final source = sources[i];
+        final placed = await _service.placeFile(
+          sourcePath: source,
+          memoId: memo.id,
+          folderId: folderId,
+          subDir: MemoSubDir.assets,
+        );
+        final kind = FileTypes.mediaKindOf(source);
+        int? w;
+        int? h;
+        String? thumb;
+        if (kind == MediaKind.image) {
+          final size = await _service.readImageSize(placed);
+          w = size?.width;
+          h = size?.height;
+          thumb = await _service.generateImageThumb(placed, memo.id);
+          firstThumb ??= thumb;
+        }
+        await _memos.upsertMedia(MediaItem(
+          id: UuidUtils.newId(),
+          memoId: memo.id,
+          path: placed,
+          kind: kind,
+          sortOrder: i,
+          width: w,
+          height: h,
+          thumbPath: thumb,
+          createdAt: MsDateUtils.nowMs(),
+        ));
       }
-      await _memos.upsertMedia(MediaItem(
-        id: UuidUtils.newId(),
-        memoId: memo.id,
-        path: placed,
-        kind: kind,
-        sortOrder: i,
-        width: w,
-        height: h,
-        thumbPath: thumb,
-        createdAt: MsDateUtils.nowMs(),
-      ));
+    } catch (e) {
+      // 部分导入失败后回滚：删除已创建的 memo 与关联的 media 记录，
+      // 避免留下只有部分文件的孤儿数据。
+      await _memos.hardDelete(memo.id);
+      rethrow;
     }
     return _memos.save(memo.copyWith(
       thumbnailPath: firstThumb,

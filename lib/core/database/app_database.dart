@@ -46,6 +46,13 @@ class AppDatabase extends _$AppDatabase {
         beforeOpen: (details) async {
           // 打开时启用外键级联（SQLite 默认关闭）。
           await customStatement('PRAGMA foreign_keys = ON');
+          // 小组件配置 Activity 会启动独立 Flutter 引擎并各自建立一个 sqlite 连接。
+          // 默认 rollback journal 下并发读写容易立刻返回 SQLITE_BUSY，
+          // 导致配置页列表永久转圈；WAL 允许读写并发，是多连接场景的标准模式。
+          // 该 pragma 需要写锁，极端并发下可能失败，失败不影响打开（best-effort）。
+          try {
+            await customStatement('PRAGMA journal_mode = WAL');
+          } catch (_) {}
         },
       );
 }

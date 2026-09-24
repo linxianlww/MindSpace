@@ -21,12 +21,20 @@ object ShareReceiverHelper {
     // 把收到的 intent 序列化为 Dart 可消费的 Map；解析失败返回 null。
     fun parse(intent: Intent?): Map<String, Any?>? {
         if (intent == null) return null
-        return when (intent.action) {
+        val action = when (intent.action) {
             Intent.ACTION_PROCESS_TEXT -> parseProcessText(intent)
             Intent.ACTION_SEND -> parseSend(intent)
             Intent.ACTION_SEND_MULTIPLE -> parseSendMultiple(intent)
             Intent.ACTION_VIEW -> parseView(intent)
             else -> null
+        } ?: return null
+        // 如果 Intent 携带 targetFolderId（从 ShareReceiverActivity 转发过来为私密空间标记），
+        // 注入到返回的 map 中，以便 Dart 侧按字段分流。
+        val targetFolderId = intent.getStringExtra(ShareReceiverActivity.EXTRA_TARGET_FOLDER_ID)
+        return if (targetFolderId != null) {
+            action + ("targetFolderId" to targetFolderId)
+        } else {
+            action
         }
     }
 

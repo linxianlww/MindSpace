@@ -16,18 +16,36 @@ final currentFolderIdProvider = StateProvider<String?>((ref) => null);
 final searchKeywordProvider = StateProvider<String>((ref) => '');
 
 /// 某父文件夹下的子文件夹列表（folderListProvider）。
+///
+/// 顶层列表（parentId == null）已自动排除私密空间入口文件夹，
+/// UI 通过 [privateSpaceEntryProvider] 单独获取。
 final folderListProvider =
     StreamProvider.family<List<Folder>, String?>((ref, parentId) {
-  return ref.watch(folderRepositoryProvider).watchChildren(parentId);
+  final repo = ref.watch(folderRepositoryProvider);
+  if (parentId == null) {
+    return repo.watchTopLevel();
+  }
+  return repo.watchChildren(parentId);
 });
 
 /// 某文件夹下的铭记列表（memoListProvider），排序跟随设置。
+///
+/// 私密空间根目录（folderId == kPrivateSpaceFolderId）调用 watchPrivateFolder
+///（仅允许已解锁会话访问）；其他文件夹调用 watchByFolder（自动排除私密空间内容）。
 final memoListProvider =
     StreamProvider.family<List<Memo>, String?>((ref, folderId) {
   final settings = ref.watch(settingsProvider);
   final keyword = ref.watch(searchKeywordProvider).trim();
   final repo = ref.watch(memoRepositoryProvider);
   if (keyword.isNotEmpty) return repo.watchSearch(keyword);
+  if (folderId == kPrivateSpaceFolderId) {
+    // 私密空间：仅当已解锁时才能查看（调用方在进入私密空间前已做 PIN 验证）
+    return repo.watchPrivateFolder(
+      folderId,
+      sortField: settings.sortField,
+      ascending: settings.sortAscending,
+    );
+  }
   return repo.watchByFolder(
     folderId,
     sortField: settings.sortField,
@@ -68,3 +86,6 @@ final hitokotoProvider = FutureProvider<String?>((ref) async {
   }
   return null;
 });
+
+/// 前一次 currentFolderId（用于检测离开私密文件夹 → 触发锁定）。
+final previousFolderIdProvider = StateProvider<String?>((ref) => null);

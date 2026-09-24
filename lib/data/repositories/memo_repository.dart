@@ -36,9 +36,25 @@ class MemoRepository {
         .map((rows) => rows.map(Mappers.memoRow).toList());
   }
 
+  /// 私密空间内的铭记查询（不过滤私密空间目录；需保证调用前已 PIN 验证）。
+  Stream<List<Memo>> watchPrivateFolder(
+    String? folderId, {
+    String sortField = 'updatedAt',
+    bool ascending = false,
+  }) {
+    return _db.memos
+        .watchPrivateFolder(folderId,
+            sortField: sortField, ascending: ascending)
+        .map((rows) => rows.map(Mappers.memoRow).toList());
+  }
+
   Stream<List<Memo>> watchSearch(String keyword) {
     final kw = keyword.trim();
+    // 防竞态：以递增 token 标记每次查询，仅当 token 最新时才发射结果，
+    // 旧查询即便后完成也不会覆盖新结果（无需额外依赖）。
+    var currentToken = 0;
     return _db.memos.watchSearch(kw).asyncMap((rows) async {
+      final token = ++currentToken;
       final found = <String, Memo>{
         for (final r in rows) r.id: Mappers.memoRow(r),
       };
@@ -47,6 +63,8 @@ class MemoRepository {
       final textRows =
           await _db.memos.activeOfType(MemoType.text.wire);
       for (final r in textRows) {
+        // 扫描过程中如有新查询发起，则放弃本次结果。
+        if (token != currentToken) return <Memo>[];
         if (found.containsKey(r.id)) continue;
         final memo = Mappers.memoRow(r);
         final content = await _textContent(memo);
@@ -58,6 +76,7 @@ class MemoRepository {
       final todoRows =
           await _db.memos.activeOfType(MemoType.todo.wire);
       for (final r in todoRows) {
+        if (token != currentToken) return <Memo>[];
         if (found.containsKey(r.id)) continue;
         final memo = Mappers.memoRow(r);
         final content = await _todoContent(memo);
@@ -67,6 +86,8 @@ class MemoRepository {
       }
       final list = found.values.toList()
         ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+      // 最终校验：若已被更新的查询取代，则丢弃。
+      if (token != currentToken) return <Memo>[];
       return list;
     });
   }
@@ -171,8 +192,12 @@ class MemoRepository {
     if (memo != null) await _persistMeta(memo.copyWith(title: title));
   }
 
-  Future<void> setAppearance(String id, {int? color, String? remark}) =>
-      _db.memos.updateAppearance(id, MsDateUtils.nowMs(), color: color, remark: remark);
+  Future<void> setAppearance(String id, {int? color, String? remark}) async {
+    await _db.memos.updateAppearance(id, MsDateUtils.nowMs(), color: color, remark: remark);
+    // 同步刷新 meta.json，避免数据库与文件系统中的元数据不一致。
+    final memo = await findById(id);
+    if (memo != null) await _persistMeta(memo);
+  }
 
   /// 仅刷新类型专属元数据（如时长、页数、波形等）。
   Future<void> updateMetadata(
@@ -193,8 +218,12 @@ class MemoRepository {
       memoId: memo.id,
       folderId: memo.folderId,
     );
-    final json = {
+    // 显式字段写在 ...metadata 之后，确保即便 metadata 中有同名键也不会覆盖
+    // 核心字段（如 id、type、tags）。
+    final json = <String, dynamic>{
+      ...memo.metadata,
       'id': memo.id,
+      'folderId': memo.folderId,
       'type': memo.type.wire,
       'title': memo.title,
       'createdAt': memo.createdAt,
@@ -202,8 +231,8 @@ class MemoRepository {
       'color': memo.color,
       'remark': memo.remark,
       'fontId': memo.fontId,
+      'thumbnailPath': memo.thumbnailPath,
       'tags': memo.tags,
-      ...memo.metadata,
     };
     await _fs.writeJson(path, json);
   }

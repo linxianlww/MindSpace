@@ -38,6 +38,9 @@ dependencies:
   open_filex: ^4.5.0
   screenshot: ^3.0.0
 
+  # —— 私密空间：生物识别（指纹 / 面容）——
+  local_auth: ^2.3.0
+
   # —— UI：瀑布流 / 富文本 / 图片查看与处理 ——
   flutter_staggered_grid_view: ^0.7.0
   flutter_quill: ^11.0.0
@@ -76,6 +79,8 @@ dependencies:
   dynamic_color: ^1.7.0   # Android 12+ 动态取色（Material You）
   intl: ^0.20.2
   http: ^1.2.0
+
+  # —— 桌面小组件（原生方案：MethodChannel + SharedPreferences，无 Glance / 无 home_widget）——
 
 # 使用本地修补版 pdfrx_engine 0.4.4：
 # 1) 0.4.5+ 经 image^4.8/archive^4 与 excel 锁定的 archive 3 冲突；

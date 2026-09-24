@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/todo_item_container"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="6dp"
+    android:background="#FFFBFE"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- 复选框：用 TextView 兼容 RemoteViews，文本前缀 ☑/☐ -->
+    <TextView
+        android:id="@+id/todo_checkbox"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:gravity="center"
+        android:text="☐"
+        android:textSize="22sp"
+        android:textColor="#FF6D00"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <!-- 待办文字 -->
+    <TextView
+        android:id="@+id/todo_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="4dp"
+        android:text="待办事项"
+        android:textColor="#1C1B1F"
+        android:textSize="13sp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+</LinearLayout>

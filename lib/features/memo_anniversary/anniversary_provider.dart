@@ -228,8 +228,9 @@ _TargetInfo _targetYearly(AnniversaryConfig cfg, DateTime today) {
     final day = parts[2]!;
     final isLeap = cfg.isLeapMonth;
 
-    // 从当前农历年向前找：若今年对应公历已过去则推至下一年
-    for (var y = lunarYear; y <= lunarYear + 200; y++) {
+    // 从基准农历年向前找：若今年对应公历已过去则推至下一年；
+    // 尊重 repeatInterval 间隔（如每 2 年），避免间隔完全失效。
+    for (var y = lunarYear; y <= lunarYear + 200; y += interval) {
       final sol = _lunarToSolarSafe(y, month, day, isLeap);
       if (sol == null) continue;
       if (!sol.isBefore(today)) {

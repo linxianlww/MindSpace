@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../core/di/providers.dart' show kPrivateSpaceFolderId;
 import '../../core/storage/mindspace_storage.dart';
 import '../../core/utils/ms_date_utils.dart';
 import '../../core/utils/uuid_utils.dart';
@@ -19,6 +20,42 @@ class FolderRepository {
     return _db.folders
         .watchChildren(parentId)
         .map((rows) => rows.map(Mappers.folderRow).toList());
+  }
+
+  /// 顶层文件夹列表（排除私密空间根文件夹，UI 单独处理）。
+  Stream<List<Folder>> watchTopLevel() {
+    return _db.folders
+        .watchTopLevel()
+        .map((rows) => rows.map(Mappers.folderRow).toList());
+  }
+
+  /// 确保私密空间根文件夹存在；若不存在则创建。
+  ///
+  /// 返回私密空间 Folder 实体。
+  Future<Folder> ensurePrivateSpaceFolder() async {
+    final existing = await _db.folders.getPrivateSpaceRoot();
+    if (existing != null) return Mappers.folderRow(existing);
+
+    final now = MsDateUtils.nowMs();
+    final folder = Folder(
+      id: kPrivateSpaceFolderId,
+      name: '私密空间',
+      parentId: null,
+      createdAt: now,
+      updatedAt: now,
+      sortOrder: 0,
+    );
+    await _db.folders.upsert(Mappers.folderToCompanion(folder));
+
+    // 在磁盘建立私密空间目录
+    final dir = p.join(
+      MindspaceStorage.instance.foldersDir.path,
+      kPrivateSpaceFolderId,
+      'memos',
+    );
+    MindspaceStorage.instance.ensureDir(dir);
+
+    return folder;
   }
 
   Future<List<Folder>> ancestorChain(String? folderId) {

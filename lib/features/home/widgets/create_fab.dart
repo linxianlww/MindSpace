@@ -4,6 +4,33 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/md3e_tokens.dart';
 
+/// 遮罩透明度动画：
+/// - 展开时：前 40% 的时间快速达到目标透明度
+/// - 收起时：后 40% 的时间才开始淡出，避免与入口消失冲突
+Animation<double> _scrimOpacityAnimation(Animation<double> parent) {
+  return Tween<double>(begin: 0.0, end: 1.0).animate(
+    CurvedAnimation(
+      parent: parent,
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+      reverseCurve: const Interval(0.6, 1.0, curve: Curves.easeIn),
+    ),
+  );
+}
+
+/// 主按钮旋转角度动画：0 → 45°（0 → π/4）
+Animation<double> _fabRotationAnimation(Animation<double> parent) {
+  return Tween<double>(begin: 0.0, end: math.pi / 4).animate(
+    CurvedAnimation(
+      parent: parent,
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+      reverseCurve: const Interval(0.6, 1.0, curve: Curves.easeIn),
+    ),
+  );
+}
+
+/// 主按钮标签切换：根据控制器中间值判断
+/// 当动画值 > 0.5 时显示「收起」，否则显示「新建」
+
 /// 新建目标类型。
 enum CreateTarget { text, media, audio, file, folder, totp, todo, anniversary }
 
@@ -27,7 +54,7 @@ class CreateFab extends StatefulWidget {
   State<CreateFab> createState() => CreateFabState();
 }
 
-/// 暴露给主页，用于返回键拦截时主动收起。
+// 暴露给主页，用于返回键拦截时主动收起。
 class CreateFabState extends State<CreateFab>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl = AnimationController(
@@ -36,6 +63,9 @@ class CreateFabState extends State<CreateFab>
   );
   bool _open = false;
   OverlayEntry? _scrimEntry;
+  OverlayEntry? _fabOverlayEntry;
+  // true = 当前正在关闭动画中，Scaffold FAB 继续保持隐藏
+  bool _pendingClose = false;
 
   // 条目定义: (target, icon, label, accent)
   static const _items = <(CreateTarget, IconData, String, Color)>[
@@ -65,16 +95,19 @@ class CreateFabState extends State<CreateFab>
   }
 
   void _toggle() {
-    setState(() => _open = !_open);
-    _open ? _ctrl.forward() : _ctrl.reverse();
+    final wasOpen = _open;
+    // _pendingClose 与 _open 必须在同一个 setState 中一起翻转，
+    // 否则会出现 _open=false && _pendingClose=false 的帧窗口，导致 Scaffold FAB
+    // 与 overlay FAB 同时显示（视觉上的「两层」）。
+    setState(() {
+      _open = !_open;
+      _pendingClose = wasOpen;
+    });
     if (_open) {
+      _ctrl.forward();
       _showScrim();
     } else {
-      // 收起时不立即移除遮罩，等最后一个入口消失后再清理。
-      final lastStart = ((_items.length - 1) * _stagger).clamp(0.0, 1.0 - _itemSpan);
-      Future.delayed(Duration(milliseconds: (480 * (lastStart + _itemSpan)).round()), () {
-        if (mounted && !_open) _hideScrim();
-      });
+      _ctrl.reverse();
     }
     widget.onOpenChanged?.call(_open);
   }
@@ -84,45 +117,87 @@ class CreateFabState extends State<CreateFab>
     if (_open) _toggle();
   }
 
+  /// 强制立即收起：停止并重置动画、立刻移除 overlay，不等待动画完成。
+  /// 用于离开主页前（如 pill 点击导航、didPush），避免 overlay 残留在其它页面。
+  /// 必须 reset()，否则 _ctrl.value 停在原值会让标签卡在「收起」，且后续
+  /// forward() 无效果，pill 列表入场动画丢失。
+  void forceClose() {
+    _hideScrim();
+    _ctrl.stop();
+    _ctrl.reset();
+    if (mounted) {
+      setState(() {
+        _open = false;
+        _pendingClose = false;
+      });
+    }
+  }
+
   bool get isOpen => _open;
+
+  late final Animation<double> _scrimOpacity = _scrimOpacityAnimation(_ctrl);
+  late final Animation<double> _fabRotation = _fabRotationAnimation(_ctrl);
 
   void _showScrim() {
     _hideScrim();
     final overlayState = Overlay.of(context);
     _scrimEntry = OverlayEntry(builder: (ctx) {
+      // 必须在 overlay 上下文内获取 viewPadding，确保拿到系统导航栏高度
+      final bottomPadding = MediaQuery.viewPaddingOf(ctx).bottom;
       final isDark = Theme.of(ctx).brightness == Brightness.dark;
       final barrierColor = isDark ? Colors.white24 : Colors.black54;
-      return IgnorePointer(
-        ignoring: false,
-        child: _ScrimStack(
-          barrierColor: barrierColor,
-          onBarrierTap: _toggle,
-          child: Positioned(
-            right: 16,
-            // 主按钮高度约 56 + 底边距 16 + 8 间距
-            bottom: 80,
-            child: Material(
-              type: MaterialType.transparency,
-              child: _buildPillList(),
-            ),
+      return _ScrimStack(
+        scrimOpacity: _scrimOpacity,
+        fabRotation: _fabRotation,
+        barrierColor: barrierColor,
+        onBarrierTap: _toggle,
+        bottomPadding: bottomPadding,
+        child: Positioned(
+          right: 16,
+          bottom: 80 + bottomPadding,
+          child: Material(
+            type: MaterialType.transparency,
+            child: _buildPillList(),
           ),
         ),
       );
     });
     overlayState.insert(_scrimEntry!);
+
+    // 在遮罩之上再插入一个 overlay entry 显示 FAB 按钮，确保可点击
+    _fabOverlayEntry = OverlayEntry(builder: (ctx) {
+      // 在 overlay 上下文内获取系统导航栏高度
+      final bottomPadding = MediaQuery.viewPaddingOf(ctx).bottom;
+      return Positioned.fill(
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Padding(
+            padding: EdgeInsets.only(right: 16, bottom: 16 + bottomPadding),
+            child: _buildFab(),
+          ),
+        ),
+      );
+    });
+    overlayState.insert(_fabOverlayEntry!);
   }
 
   void _hideScrim() {
     _scrimEntry?.remove();
     _scrimEntry = null;
+    _fabOverlayEntry?.remove();
+    _fabOverlayEntry = null;
   }
 
   @override
   void initState() {
     super.initState();
     _ctrl.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed && mounted) {
-        setState(() {});
+      // 收起动画结束时，移除 overlay 并刷新 UI 显示 Scaffold FAB
+      if (status == AnimationStatus.dismissed && mounted && _pendingClose) {
+        _hideScrim();
+        setState(() {
+          _pendingClose = false;
+        });
       }
     });
   }
@@ -136,7 +211,11 @@ class CreateFabState extends State<CreateFab>
 
   @override
   Widget build(BuildContext context) {
-    // 主按钮始终可见：展开态只由 Overlay 承载入口列表，不隐藏主按钮。
+    // overlay FAB 存在时保持隐藏 Scaffold FAB，避免两个按钮同时显示导致闪烁
+    // 两个 FAB 都由 _ctrl.value 驱动旋转和标签，保证动画同步
+    if (_open || _pendingClose) {
+      return const SizedBox.shrink();
+    }
     return _buildFab();
   }
 
@@ -144,13 +223,18 @@ class CreateFabState extends State<CreateFab>
   Widget _buildFab() {
     return FloatingActionButton.extended(
       onPressed: _toggle,
-      icon: AnimatedRotation(
-        turns: _open ? 0.125 : 0,
-        duration: Md3eTokens.medium,
-        curve: Md3eTokens.emphasized,
-        child: Icon(_open ? Icons.close : Icons.add),
+      icon: AnimatedBuilder(
+        animation: _fabRotation,
+        builder: (context, child) => Transform.rotate(
+          angle: _fabRotation.value,
+          child: child,
+        ),
+        child: const Icon(Icons.add),
       ),
-      label: Text(_open ? '收起' : '新建'),
+      label: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, _) => Text(_ctrl.value > 0.5 ? '收起' : '新建'),
+      ),
     );
   }
 
@@ -172,7 +256,8 @@ class CreateFabState extends State<CreateFab>
               label: _items[i].$3,
               accent: _items[i].$4,
               onTap: () {
-                _toggle();
+                // 立即清理 overlay，避免导航到新页面后 overlay 残留在上层
+                forceClose();
                 widget.onSelect(_items[i].$1);
               },
             ),
@@ -286,16 +371,22 @@ class _PillContentState extends State<_PillContent> {
   }
 }
 
-/// 遮罩 Stack：底层可点击的暗色遮罩；上层浮动展开内容。
+/// 遮罩 Stack：底层可点击的暗色遮罩（带透明度动画）；上层浮动展开内容。
 class _ScrimStack extends StatelessWidget {
   const _ScrimStack({
+    required this.scrimOpacity,
+    required this.fabRotation,
     required this.barrierColor,
     required this.onBarrierTap,
+    required this.bottomPadding,
     required this.child,
   });
 
+  final Animation<double> scrimOpacity;
+  final Animation<double> fabRotation;
   final Color barrierColor;
   final VoidCallback onBarrierTap;
+  final double bottomPadding;
   final Widget child;
 
   @override
@@ -303,10 +394,22 @@ class _ScrimStack extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onBarrierTap,
-            child: ColoredBox(color: barrierColor),
+          child: AnimatedBuilder(
+            animation: scrimOpacity,
+            builder: (context, child) {
+              return IgnorePointer(
+                ignoring: scrimOpacity.value < 0.1,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onBarrierTap,
+                  child: ColoredBox(
+                    color: barrierColor.withValues(
+                      alpha: barrierColor.a * scrimOpacity.value,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         child,

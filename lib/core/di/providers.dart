@@ -5,10 +5,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_constants.dart';
 import '../database/app_database.dart';
 import '../settings/app_settings.dart';
+import '../settings/private_space_service.dart';
 import '../storage/font_storage.dart';
 import '../storage/import_service.dart';
 import '../../data/datasources/file_system_datasource.dart';
 import '../../data/datasources/local_database_datasource.dart';
+import '../../data/models/folder.dart';
 import '../../data/repositories/folder_repository.dart';
 import '../../data/repositories/font_repository.dart';
 import '../../data/repositories/import_repository.dart';
@@ -146,3 +148,21 @@ final settingsProvider =
 /// 便捷：只监听主题模式。
 final themeModeProvider = Provider<ThemeMode>(
     (ref) => ref.watch(settingsProvider.select((s) => s.themeMode)));
+
+// —————————————— 私密空间 ——————————————
+
+/// 私密空间保留文件夹 ID（根级私密文件夹）。
+const String kPrivateSpaceFolderId = '__private_space__';
+
+final privateSpaceServiceProvider = ChangeNotifierProvider<PrivateSpaceService>(
+    (ref) => PrivateSpaceService(ref.watch(sharedPrefsProvider)));
+
+/// 私密空间文件夹实体（若数据库中不存在则不发射）。
+final privateSpaceFolderProvider = FutureProvider<Folder?>((ref) async {
+  return ref.watch(folderRepositoryProvider).findById(kPrivateSpaceFolderId);
+});
+
+/// 当前是否已解锁私密空间（会话级）。
+final privateSpaceUnlockedProvider = Provider<bool>((ref) {
+  return ref.watch(privateSpaceServiceProvider).sessionUnlocked;
+});

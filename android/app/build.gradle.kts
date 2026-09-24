@@ -13,7 +13,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
     defaultConfig {
         applicationId = "aria.neko.box"
         // 【兼容性】minSdk = 26（Android 8.0）：
@@ -51,4 +50,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// 【桌面小组件】纯原生方案（传统 AppWidgetProvider + XML 布局）
+// 无 Glance / 无 Compose，仅依赖系统 AppWidget 框架
+dependencies {
+    implementation("androidx.core:core-ktx:1.13.1")
 }

@@ -20,6 +20,7 @@ import '../../features/memo_totp/totp_view_page.dart';
 import '../../features/settings/backup_settings_page.dart';
 import '../../features/settings/developer_info_page.dart';
 import '../../features/settings/font_settings_page.dart';
+import '../../features/settings/private_space_settings_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../../features/settings/storage_settings_page.dart';
 import '../../features/settings/text_settings_page.dart';
@@ -159,6 +160,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings/backup',
         pageBuilder: (c, s) => _sharedAxis(const BackupSettingsPage()),
+      ),
+      GoRoute(
+        path: '/settings/private_space',
+        pageBuilder: (c, s) => _sharedAxis(const PrivateSpaceSettingsPage()),
       ),
       GoRoute(
         path: '/settings',

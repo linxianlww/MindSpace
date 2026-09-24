@@ -153,7 +153,6 @@ class _VideoPlayer extends StatefulWidget {
 }
 
 class _VideoPlayerState extends State<_VideoPlayer> {
-  VideoPlayerController? _vp;
   ChewieController? _chewie;
 
   @override
@@ -164,7 +163,6 @@ class _VideoPlayerState extends State<_VideoPlayer> {
 
   Future<void> _init() async {
     final vp = VideoPlayerController.file(File(widget.path));
-    _vp = vp;
     await vp.initialize();
     if (!mounted) {
       await vp.dispose();
@@ -185,8 +183,10 @@ class _VideoPlayerState extends State<_VideoPlayer> {
 
   @override
   void dispose() {
+    // ChewieController.dispose() 会连带释放其持有的 VideoPlayerController，
+    // 因此不能再对 _vp 调用 dispose()，否则部分平台（尤其 iOS）会 double-free
+    // 触发 native crash 或 StateError 断言。
     _chewie?.dispose();
-    _vp?.dispose();
     super.dispose();
   }
 

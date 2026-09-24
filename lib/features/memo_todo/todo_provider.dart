@@ -37,6 +37,10 @@ class TodoEditorNotifier
 
   /// 加载时的 items JSON 签名。
   String? _initialItemsSignature;
+  /// 标记是否已从磁盘加载过 items。当 provider 因外部 invalidate 触发重建时
+  ///（如 setColor / setRemark 后刷新 memo），保留内存中已编辑的 items 不被
+  /// 磁盘旧版本覆盖。
+  bool _itemsLoadedFromDisk = false;
 
   @override
   Future<TodoEditorData> build(String memoId) async {
@@ -49,16 +53,23 @@ class TodoEditorNotifier
     final fs = ref.read(fileSystemDatasourceProvider);
     final path = p.join(dir, _fileName);
 
-    List<TodoItem> items = [];
-    if (fs.exists(path)) {
-      try {
-        final raw = await fs.readString(path);
-        items = TodoItem.listFromJson(raw);
-      } catch (_) {/* 损坏则重置为空列表 */}
+    List<TodoItem> items;
+    if (!_itemsLoadedFromDisk) {
+      // 首次加载：从磁盘读 items（如有）。
+      items = [];
+      if (fs.exists(path)) {
+        try {
+          final raw = await fs.readString(path);
+          items = TodoItem.listFromJson(raw);
+        } catch (_) {/* 损坏则重置为空列表 */}
+      }
+      _initialItemsSignature = TodoItem.listToJson(items);
+      _itemsLoadedFromDisk = true;
+    } else {
+      // 热重建（invalidate 触发）：保留当前内存中的 items 不被磁盘旧版本覆盖，
+      // 仅更新 memo 元数据字段。
+      items = state.valueOrNull?.items ?? [];
     }
-
-    // 记录加载时的 items 签名。
-    _initialItemsSignature = TodoItem.listToJson(items);
 
     return TodoEditorData(memo: memo, items: items);
   }

@@ -32,11 +32,20 @@ class ShareService {
 
   /// 把截图得到的字节先写入临时目录再以图片分享。
   Future<void> shareBytes(Uint8List bytes,
-      {String fileName = 'nekobox.png'}) async {
+      {String? fileName}) async {
     final tmp = await getTemporaryDirectory();
-    final target = p.join(tmp.path, fileName);
+    // 用微秒时间戳生成唯一文件名，避免并发分享时临时文件互相覆盖。
+    final name = fileName ?? 'nekobox_${DateTime.now().microsecondsSinceEpoch}.png';
+    final target = p.join(tmp.path, name);
     await File(target).writeAsBytes(bytes, flush: true);
-    await shareFile(target);
+    try {
+      await shareFile(target);
+    } finally {
+      // 分享完成（或失败后清理临时文件，避免磁盘膨胀。
+      try {
+        if (File(target).existsSync()) File(target).deleteSync();
+      } catch (_) {/* 清理失败不影响主流程 */}
+    }
   }
 }
 

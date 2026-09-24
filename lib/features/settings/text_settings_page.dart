@@ -132,31 +132,40 @@ class TextSettingsPage extends ConsumerWidget {
     final current =
         ref.read(settingsProvider).shareImageWatermarkSuffix;
     final ctrl = TextEditingController(text: current);
-    final suffix = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('分享水印后缀'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          maxLength: 20,
-          decoration: const InputDecoration(
-            hintText: '将显示在分享长图底部',
-            prefixText: '分享自 ',
-            border: OutlineInputBorder(),
+    try {
+      final suffix = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('分享水印后缀'),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            maxLength: 20,
+            decoration: const InputDecoration(
+              hintText: '将显示在分享长图底部',
+              prefixText: '分享自 ',
+              border: OutlineInputBorder(),
+            ),
           ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, ctrl.text),
+                child: const Text('确定')),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text),
-              child: const Text('确定')),
-        ],
-      ),
-    );
-    if (suffix != null) {
-      ref.read(settingsProvider.notifier).setShareImageWatermarkSuffix(suffix);
+      );
+      if (suffix != null && suffix.trim().isNotEmpty) {
+        ref.read(settingsProvider.notifier)
+            .setShareImageWatermarkSuffix(suffix);
+      } else if (suffix != null && suffix.trim().isEmpty) {
+        // 空输入默认恢复为项目默认水印。
+        ref.read(settingsProvider.notifier)
+            .setShareImageWatermarkSuffix(AppConstants.defaultShareImageSuffix);
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 }

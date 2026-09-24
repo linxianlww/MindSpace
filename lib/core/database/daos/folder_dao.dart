@@ -14,13 +14,33 @@ class FolderDao extends DatabaseAccessor<AppDatabase>
   /// 监听某父文件夹下的正常子文件夹（parentId=null 即顶层）。
   Stream<List<FolderRow>> watchChildren(String? parentId) {
     final q = select(folderRows)
-      ..where((t) =>
-          t.deletedAt.isNull() & t.parentId.equalsNullable(parentId))
+      ..where((t) => t.deletedAt.isNull() & t.parentId.equalsNullable(parentId))
       ..orderBy([
         (t) => OrderingTerm(expression: t.sortOrder),
         (t) => OrderingTerm(expression: t.createdAt),
       ]);
     return q.watch();
+  }
+
+  /// 顶层文件夹（不含私密空间根文件夹，UI 单独展示私密空间入口）。
+  Stream<List<FolderRow>> watchTopLevel() {
+    final q = select(folderRows)
+      ..where((t) =>
+          t.deletedAt.isNull() &
+          t.parentId.isNull() &
+          t.id.equals('__private_space__').not())
+      ..orderBy([
+        (t) => OrderingTerm(expression: t.sortOrder),
+        (t) => OrderingTerm(expression: t.createdAt),
+      ]);
+    return q.watch();
+  }
+
+  /// 私密空间根文件夹查询（单独读取，供 UI 展示入口）。
+  Future<FolderRow?> getPrivateSpaceRoot() async {
+    return (select(folderRows)
+          ..where((t) => t.id.equals('__private_space__') & t.deletedAt.isNull()))
+        .getSingleOrNull();
   }
 
   /// 全部正常文件夹（扁平，用于移动选择）。

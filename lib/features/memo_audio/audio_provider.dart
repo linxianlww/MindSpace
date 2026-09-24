@@ -105,6 +105,7 @@ class AudioRecorderNotifier extends StateNotifier<RecorderValue> {
     try {
       await controller.stop();
     } catch (_) {}
+    _tick?.cancel(); // 取消计时流，防止 stop 后的残余事件覆盖 idle 状态。
     state = const RecorderValue();
   }
 
