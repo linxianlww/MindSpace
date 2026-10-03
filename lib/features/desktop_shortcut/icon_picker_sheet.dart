@@ -1,9 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
-
-import '../../core/theme/md3e_tokens.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 /// 桌面快捷方式图标选择弹窗。
 /// 返回用户选择的图片字节（自定义图标），返回 null 表示使用默认首字符图标。
@@ -35,14 +33,17 @@ class IconPickerResult {
 ///
 /// [initialTitle] 用于生成首字符预览。
 /// 返回 [IconPickerResult]，调用方据此决定是否传递 iconBytes 给原生服务。
+///
+/// 弹层内关闭一律走 [AppSheet.close]（弹层不是路由，Navigator.pop 会误退页面）；
+/// sheetCtx 位于 AppScaffold 子树内（MiuixScaffold popup 层），可被
+/// `AppScaffold.maybeOf` 反查到宿主。
 Future<IconPickerResult> showIconPickerSheet(
   BuildContext context, {
   required String initialTitle,
 }) async {
-  final result = await showModalBottomSheet<IconPickerResult?>(
+  final result = await AppSheet.show<IconPickerResult?>(
     context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
+    title: '选择图标',
     builder: (ctx) => _IconPickerBody(title: initialTitle),
   );
   return result ?? const IconPickerResult.cancel();
@@ -87,7 +88,7 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = MiuixTheme.of(context).colors;
     final mediaQuery = MediaQuery.of(context);
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -103,8 +104,9 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('选择图标', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 20),
+            // 标题由 AppSheet.show 的 title 参数渲染（MiuixOverlayBottomSheet），
+            // 这里不再自绘。
+            const SizedBox(height: 8),
             // 可滚动的预览内容区域
             Flexible(
               child: SingleChildScrollView(
@@ -115,7 +117,7 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
                     _PreviewTile(
                       selected: _useAutoChar,
                       onTap: () => setState(() => _useAutoChar = true),
-                      icon: _CharIcon(char: _firstChar, color: scheme.primary),
+                      icon: _CharIcon(char: _firstChar, color: colors.primary),
                       label: '使用首字符「$_firstChar」自动生成',
                     ),
                     const SizedBox(height: 12),
@@ -125,10 +127,17 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
                       onTap: _pickImage,
                       icon: _customBytes != null
                           ? ClipOval(
-                              child: Image.memory(_customBytes!, width: 56, height: 56, fit: BoxFit.cover))
-                          : CircleAvatar(
-                              backgroundColor: scheme.surfaceContainerHighest,
-                              child: Icon(Icons.add_photo_alternate_outlined, color: scheme.onSurfaceVariant),
+                              child: Image.memory(_customBytes!,
+                                  width: 56, height: 56, fit: BoxFit.cover))
+                          : Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: colors.surfaceContainerHighest,
+                                shape: BoxShape.circle,
+                              ),
+                              child: HiuiIcon(HiuiIcons.image,
+                                  color: colors.onSurfaceVariantActions),
                             ),
                       label: _customBytes != null ? '已选择图片' : '从相册选择图标',
                     ),
@@ -141,24 +150,36 @@ class _IconPickerBodyState extends State<_IconPickerBody> {
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context, const IconPickerResult.cancel()),
-                    child: const Text('取消'),
+                  child: AppButton(
+                    variant: AppButtonStyle.outlined,
+                    onPressed: () => AppSheet.close(
+                        context, const IconPickerResult.cancel()),
+                    child: const MiuixText('取消'),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   flex: 2,
-                  child: FilledButton.icon(
+                  child: AppButton(
+                    variant: AppButtonStyle.filled,
                     onPressed: () {
                       if (_useAutoChar) {
-                        Navigator.pop(context, const IconPickerResult.auto());
+                        AppSheet.close(
+                            context, const IconPickerResult.auto());
                       } else if (_customBytes != null) {
-                        Navigator.pop(context, IconPickerResult.custom(_customBytes!));
+                        AppSheet.close(context,
+                            IconPickerResult.custom(_customBytes!));
                       }
                     },
-                    icon: const Icon(Icons.check),
-                    label: const Text('创建桌面图标'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        HiuiIcon(HiuiIcons.check),
+                        const SizedBox(width: 8),
+                        MiuixText('创建桌面图标'),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -186,35 +207,35 @@ class _PreviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: Md3eTokens.dialogBorder,
-      child: Container(
+    final colors = MiuixTheme.of(context).colors;
+    return MiuixSurface(
+      onPressed: onTap,
+      cornerRadius: AppTokens.radiusDialog,
+      squircleEnabled: true,
+      color: selected
+          ? colors.primaryContainer.withValues(alpha: 0.3)
+          : colors.surface,
+      border: Border.all(
+        color: selected ? colors.primary : colors.outline,
+        width: selected ? 2 : 1,
+      ),
+      child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: Md3eTokens.dialogBorder,
-          border: Border.all(
-            color: selected ? scheme.primary : scheme.outlineVariant,
-            width: selected ? 2 : 1,
-          ),
-          color: selected ? scheme.primaryContainer.withValues(alpha: 0.3) : null,
-        ),
         child: Row(
           children: [
             SizedBox(width: 56, height: 56, child: icon),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
+              child: MiuixText(
                 label,
-                style: TextStyle(
-                  color: selected ? scheme.primary : scheme.onSurface,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                ),
+                style: MiuixTheme.of(context).textStyles.body1.copyWith(
+                      color: selected ? colors.primary : colors.onSurface,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.normal,
+                    ),
               ),
             ),
-            if (selected)
-              Icon(Icons.check_circle, color: scheme.primary),
+            if (selected) HiuiIcon(HiuiIcons.checkCircle, color: colors.primary),
           ],
         ),
       ),
@@ -231,24 +252,22 @@ class _CharIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        char.length == 1 && RegExp('[a-zA-Z]').hasMatch(char) ? char.toUpperCase() : char,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-        ),
+    // 圆形图标底座：AppAvatar 默认 squircle，传 borderRadius = 尺寸一半得正圆。
+    // 白色文字为图标底色上的固定前景，属功能性硬编码。
+    return AppAvatar(
+      radius: 28,
+      borderRadius: 28,
+      backgroundColor: color,
+      child: MiuixText(
+        char.length == 1 && RegExp('[a-zA-Z]').hasMatch(char)
+            ? char.toUpperCase()
+            : char,
+        style: MiuixTheme.of(context)
+            .textStyles
+            .title2
+            .copyWith(color: Colors.white, fontWeight: FontWeight.bold),
         textAlign: TextAlign.center,
       ),
     );
   }
 }
-

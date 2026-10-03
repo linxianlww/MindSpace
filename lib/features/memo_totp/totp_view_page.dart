@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,7 +32,9 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
   void initState() {
     super.initState();
     _ticker = createTicker((_) {
-      if (mounted) setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+      if (mounted) {
+        setState(() => _nowMs = DateTime.now().millisecondsSinceEpoch);
+      }
     })
       ..start();
   }
@@ -43,8 +45,8 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
     super.dispose();
   }
 
-  Future<void> _setMemoColor(Memo? memo) async {
-    if (memo == null) return;
+  Future<void> _setMemoColor(BuildContext context, Memo? memo) async {
+    if (memo == null || !mounted) return;
     final r = await ColorPickerSheet.show(context, current: memo.color);
     if (r == null || !mounted) return;
     await ref
@@ -53,8 +55,47 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
     ref.invalidate(memoDetailProvider(memo.id));
   }
 
-  Future<void> _editRemark(Memo? memo) async {
-    if (memo == null) return;
+  /// 清除卡片颜色：纯数据操作，无需弹层宿主 context。
+  Future<void> _clearMemoColor(Memo memo) async {
+    if (!mounted) return;
+    await ref.read(memoRepositoryProvider).setAppearance(memo.id, color: null);
+    ref.invalidate(memoDetailProvider(memo.id));
+  }
+
+  Future<void> _rename(BuildContext context, Memo? memo) async {
+    if (memo == null || !mounted) return;
+    final ctrl = TextEditingController(text: memo.title);
+    try {
+      final result = await AppDialog.show<String>(
+        context: context,
+        title: '重命名',
+        content: AppInput(
+          controller: ctrl,
+          onChanged: (_) {},
+          hintText: '输入新标题',
+        ),
+        actions: [
+          AppButton(
+              variant: AppButtonStyle.text,
+              onPressed: () => AppDialog.close(context),
+              child: const MiuixText('取消')),
+          AppButton(
+              onPressed: () =>
+                  AppDialog.close<String>(context, ctrl.text.trim()),
+              child: const MiuixText('确定')),
+        ],
+      );
+      if (result != null && result.isNotEmpty && result != memo.title) {
+        await ref.read(memoRepositoryProvider).rename(memo.id, result);
+        ref.invalidate(memoDetailProvider(memo.id));
+      }
+    } finally {
+      ctrl.dispose();
+    }
+  }
+
+  Future<void> _editRemark(BuildContext context, Memo? memo) async {
+    if (memo == null || !mounted) return;
     final r = await RemarkEditor.show(context, initial: memo.remark);
     if (r != null && mounted) {
       await ref
@@ -69,115 +110,83 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
 
     return memoAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      loading: () => const AppScaffold(
+        body: Center(child: AppCircleProgress()),
       ),
-      error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
+      error: (e, _) => AppScaffold(body: Center(child: MiuixText('$e'))),
       data: (memo) {
         if (memo == null) {
-          return const Scaffold(body: Center(child: Text('铭记不存在')));
+          return const AppScaffold(body: Center(child: MiuixText('铭记不存在')));
         }
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(memo.title,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+        return AppScaffold(
+          topBar: AppHeader(
+            title: memo.title,
+            alwaysSmall: true,
             actions: [
-              PopupMenuButton<String>(
-                tooltip: '更多',
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                      value: 'color',
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          Icon(Icons.palette_outlined,
-                              size: 18,
-                              color: memo.color != null
-                                  ? Color(memo.color!)
-                                  : Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          const Text('卡片颜色'),
-                        ],
-                      )),
-                  PopupMenuItem(
-                    value: 'set_color',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) => _setMemoColor(memo)),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('修改颜色')),
-                  ),
-                  PopupMenuItem(
-                    value: 'clear_color',
-                    enabled: memo.color != null,
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) async {
-                      await ref
-                          .read(memoRepositoryProvider)
-                          .setAppearance(memo.id, color: null);
-                      ref.invalidate(memoDetailProvider(memo.id));
-                    }),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('清除颜色')),
-                  ),
-                  PopupMenuItem(
-                      value: 'label',
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.label_outline, size: 18),
-                          const SizedBox(width: 10),
-                          Text(memo.remark?.isNotEmpty == true
-                              ? memo.remark!
-                              : '备注标签'),
-                        ],
-                      )),
-                  PopupMenuItem(
-                    value: 'edit_label',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) => _editRemark(memo)),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('修改标签')),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'edit',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) {
-                      if (mounted) {
-                        context.push('/memo/totp/${widget.memoId}/edit');
-                      }
-                    }),
-                    child: const Text('编辑设置'),
-                  ),
-                  PopupMenuItem(
-                    value: 'desktop_shortcut',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) => addMemoToDesktop(context, ref, memo)),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.add_to_home_screen, size: 18),
-                        SizedBox(width: 10),
-                        Text('添加到桌面'),
-                      ],
+              // 顶栏子树的 context：菜单动作的弹层（选色/备注/桌面快捷方式）
+              // 需要 MiuixScaffold 之下的宿主 context。
+              Builder(builder: (menuCtx) {
+                final colors = MiuixTheme.of(menuCtx).colors;
+                return MiuixOverlayIconDropdownMenu(
+                  entry: MiuixDropdownEntry(items: [
+                    MiuixDropdownItem(
+                      text: '重命名',
+                      icon: const HiuiIcon(HiuiIcons.edit, size: 18),
+                      onClick: () => _rename(menuCtx, memo),
                     ),
-                  ),
-                ],
-              ),
+                    MiuixDropdownItem(
+                      text: '修改颜色',
+                      icon: HiuiIcon(HiuiIcons.skin,
+                          size: 18,
+                          color: memo.color != null
+                              ? Color(memo.color!)
+                              : colors.primary),
+                      onClick: () => _setMemoColor(menuCtx, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '清除颜色',
+                      enabled: memo.color != null,
+                      icon: HiuiIcon(HiuiIcons.clear,
+                          size: 18,
+                          color: memo.color == null
+                              ? colors.disabledOnSurface
+                              : colors.onSurface),
+                      onClick: memo.color == null
+                          ? null
+                          : () => _clearMemoColor(memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '修改标签',
+                      icon: const HiuiIcon(HiuiIcons.edit, size: 18),
+                      onClick: () => _editRemark(menuCtx, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '编辑设置',
+                      icon: const HiuiIcon(HiuiIcons.settings, size: 18),
+                      onClick: () =>
+                          menuCtx.push('/memo/totp/${widget.memoId}/edit'),
+                    ),
+                    MiuixDropdownItem(
+                      text: '添加到桌面',
+                      icon: const HiuiIcon(HiuiIcons.export, size: 18),
+                      onClick: () => addMemoToDesktop(menuCtx, ref, memo),
+                    ),
+                  ]),
+                  child: const HiuiIcon(HiuiIcons.more),
+                );
+              }),
             ],
           ),
-          body: _body(context, memo),
+          content: (context, padding) => _body(context, memo, padding),
         );
       },
     );
   }
 
-  Widget _body(BuildContext context, Memo memo) {
+  Widget _body(BuildContext context, Memo memo, EdgeInsets padding) {
     final cfg = totpConfigOf(memo);
     if (cfg == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: AppCircleProgress());
     }
     final now = DateTime.fromMillisecondsSinceEpoch(_nowMs);
     final code = totpCode(
@@ -200,94 +209,109 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
     final elapsed = _nowMs % periodMs;
     final ringFraction = 1.0 - elapsed / periodMs;
 
+    final colors = MiuixTheme.of(context).colors;
+
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding:
+          padding.add(const EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
       children: [
         const SizedBox(height: 8),
         Center(
-          child: Text(
+          child: MiuixText(
             [
               if (cfg.issuer.isNotEmpty) cfg.issuer,
               if (cfg.account.isNotEmpty) cfg.account,
             ].join(' · '),
             textAlign: TextAlign.center,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: MiuixTheme.of(context)
+                .textStyles
+                .title3
+                .copyWith(fontWeight: FontWeight.w600),
           ),
         ),
         if (memo.remark != null && memo.remark!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Center(
-              child: Text(
+              child: MiuixText(
                 memo.remark!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: MiuixTheme.of(context)
+                    .textStyles
+                    .body2
+                    .copyWith(color: colors.onSurfaceVariantSummary),
               ),
             ),
           ),
         const SizedBox(height: 28),
+        // 验证码主卡：大圆角 Surface 承载倒计时环与验证码大字。
         Center(
-          child: SizedBox(
-            width: 210,
-            height: 210,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: ringFraction, end: ringFraction),
-                  duration: const Duration(milliseconds: 50),
-                  builder: (_, v, __) {
-                    return CircularProgressIndicator(
-                      value: v.clamp(0.0, 1.0),
-                      strokeWidth: 6,
-                      strokeCap: StrokeCap.round,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surfaceContainerHighest,
-                    );
-                  },
-                ),
-                Center(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => _copy(context, code),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            code,
-                            style: Theme.of(context)
-                                .textTheme
-                                .displaySmall
-                                ?.copyWith(
+          child: MiuixSurface(
+            cornerRadius: AppTokens.radiusLarge,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: SizedBox(
+                width: 210,
+                height: 210,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween:
+                          Tween<double>(begin: ringFraction, end: ringFraction),
+                      duration: const Duration(milliseconds: 50),
+                      builder: (_, v, __) {
+                        return MiuixCircularProgressIndicator(
+                          progress: v.clamp(0.0, 1.0),
+                          size: 210,
+                          strokeWidth: 6,
+                          colors: MiuixProgressIndicatorColors(
+                            foregroundColor: colors.primary,
+                            disabledForegroundColor: colors.disabledPrimary,
+                            backgroundColor: colors.surfaceContainerHighest,
+                          ),
+                        );
+                      },
+                    ),
+                    Center(
+                      child: MiuixSurface(
+                        cornerRadius: AppTokens.radiusMedium,
+                        color: Colors.transparent,
+                        onPressed: () => _copy(context, code),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              MiuixText(
+                                code,
+                                style: MiuixTheme.of(context)
+                                    .textStyles
+                                    .title1
+                                    .copyWith(
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 3,
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
                                   ],
                                 ),
+                              ),
+                              const SizedBox(height: 6),
+                              MiuixText(
+                                '${remaining}s 后更新',
+                                style: MiuixTheme.of(context)
+                                    .textStyles
+                                    .footnote2
+                                    .copyWith(
+                                        color: colors.onSurfaceVariantSummary),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${remaining}s 后更新',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
-                                ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -295,27 +319,36 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
         Center(
           child: Column(
             children: [
-              Text('下一个验证码',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline)),
+              MiuixText('下一个验证码',
+                  style: MiuixTheme.of(context)
+                      .textStyles
+                      .footnote2
+                      .copyWith(color: colors.onSurfaceVariantSummary)),
               const SizedBox(height: 4),
-              Text(
+              MiuixText(
                 nextCode,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                      letterSpacing: 2,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                style: MiuixTheme.of(context).textStyles.body2.copyWith(
+                  color: colors.onSurfaceVariantSummary,
+                  letterSpacing: 2,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 24),
         Center(
-          child: FilledButton.tonalIcon(
+          child: MiuixButton(
             onPressed: () => _copy(context, code),
-            icon: const Icon(Icons.copy_rounded, size: 20),
-            label: const Text('复制当前验证码'),
+            colors: MiuixButtonDefaults.buttonColorsPrimary(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                HiuiIcon(HiuiIcons.copy, size: 20, color: colors.onPrimary),
+                const SizedBox(width: 8),
+                MiuixText('复制当前验证码', style: TextStyle(color: colors.onPrimary)),
+              ],
+            ),
           ),
         ),
       ],
@@ -325,10 +358,7 @@ class _TotpViewPageState extends ConsumerState<TotpViewPage>
   Future<void> _copy(BuildContext context, String code) async {
     await Clipboard.setData(ClipboardData(text: code));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('验证码已复制'), duration: Duration(seconds: 1)),
-      );
+      AppSnackbar.show(context, message: '验证码已复制');
     }
   }
 }

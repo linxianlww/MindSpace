@@ -80,8 +80,6 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     );
     state = AppSettings(
       themeMode: mode,
-      useDynamicColor: _prefs.getBool(AppSettings.kDynamic) ?? true,
-      seedColorValue: _prefs.getInt(AppSettings.kSeed),
       lineHeight: (_prefs.getDouble(AppSettings.kLineHeight) ?? 1.7)
           .clamp(1.2, 2.2),
       paragraphSpacing:
@@ -98,20 +96,6 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   Future<void> setThemeMode(ThemeMode mode) async {
     state = state.copyWith(themeMode: mode);
     await _prefs.setString(AppSettings.kThemeMode, mode.name);
-  }
-
-  Future<void> setDynamicColor(bool value) async {
-    state = state.copyWith(useDynamicColor: value);
-    await _prefs.setBool(AppSettings.kDynamic, value);
-  }
-
-  Future<void> setSeedColor(int? value) async {
-    state = state.copyWith(seedColorValue: () => value);
-    if (value == null) {
-      await _prefs.remove(AppSettings.kSeed);
-    } else {
-      await _prefs.setInt(AppSettings.kSeed, value);
-    }
   }
 
   Future<void> setLineHeight(double value) async {

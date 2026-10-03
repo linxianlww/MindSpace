@@ -26,11 +26,20 @@ android {
         versionName = flutter.versionName
     }
 
-    // 【硬约束】仅打包 arm64-v8a。
-    // 不在此声明 ndk.abiFilters / splits：Flutter Gradle 插件会在配置期向 :app 注入
-    // 完整 ABI 集合（armeabi-v7a,arm64-v8a,x86_64），此处手写会被覆盖或与之冲突。
-    // 真正的单一 ABI 过滤在根 build.gradle.kts 的 androidComponents.finalizeDsl 中完成
-    // （在 Flutter 注入之后清空并只保留 arm64-v8a），构建后解压 APK 核验只含 lib/arm64-v8a。
+    // 【ABI 策略】默认 release 仅 arm64-v8a，输出单个 APK 且仅含 lib/arm64-v8a。
+    // 使用 splits.abi 而非 ndk.abiFilters：
+    // ① AGP 规定两者互斥，设置前者时后者必须为空；
+    // ② Flutter 的 --split-per-abi 会在同一块上设置 include+resetToUniversalApk=false，
+    //    覆盖本配置为三分 APK（arm64-v8a/armeabi-v7a/x86_64），天然兼容；
+    // ③ 普通 release（无 --split-per-abi）命中本配置，resetToUniversalApk=false 确保
+    //    不生成 universal APK，include=[arm64-v8a] 使合并原生库与打包都仅针对该 ABI。
+    splits {
+        abi {
+            isEnable = true
+            isUniversalApk = false
+            include("arm64-v8a")
+        }
+    }
 
     buildTypes {
         release {
@@ -52,8 +61,6 @@ flutter {
     source = "../.."
 }
 
-// 【桌面小组件】纯原生方案（传统 AppWidgetProvider + XML 布局）
-// 无 Glance / 无 Compose，仅依赖系统 AppWidget 框架
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
 }

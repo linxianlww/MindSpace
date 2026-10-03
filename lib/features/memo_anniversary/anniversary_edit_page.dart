@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/providers.dart';
-import '../../core/theme/md3e_tokens.dart';
 import '../../core/utils/lunar_utils.dart';
 import '../home/home_provider.dart';
 import 'anniversary_provider.dart';
@@ -37,6 +36,14 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
   bool _loading = true;
 
   static const _repeatLabels = ['不重复', '每年', '每月', '每周'];
+
+  /// AppScaffold 子树内的宿主 context（弹层 API 需要脚手架下方的 context）。
+  BuildContext? _hostCtx;
+
+  BuildContext? get _pageCtx {
+    final ctx = _hostCtx;
+    return (ctx != null && ctx.mounted) ? ctx : null;
+  }
 
   @override
   void initState() {
@@ -106,8 +113,10 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
   bool get _isNew => !_loading && (_title.text.isEmpty);
 
   Future<void> _pickDate() async {
+    final ctx = _pageCtx;
+    if (ctx == null) return;
     if (_lunar) {
-      final picked = await _showLunarDatePicker();
+      final picked = await _showLunarDatePicker(ctx);
       if (picked != null) {
         setState(() {
           _date = picked.solar;
@@ -116,16 +125,41 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
       }
       return;
     }
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _date,
-      firstDate: DateTime(1900),
-      lastDate: DateTime(2100),
+    // 公历：MiuixDatePicker 内嵌底部抽屉，选择后经「确定」关闭并保存。
+    DateTime selected = _date;
+    final picked = await AppSheet.show<DateTime>(
+      context: ctx,
+      title: '选择日期',
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (sheetCtx, setSt) => Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MiuixDatePicker(
+                initialDate: _date,
+                firstDate: DateTime(1900),
+                lastDate: DateTime(2100),
+                onDateChanged: (d) => setSt(() => selected = d),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: MiuixButton(
+                  onPressed: () =>
+                      AppSheet.close<DateTime>(sheetCtx, selected),
+                  child: const MiuixText('确定'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
     if (picked != null) setState(() => _date = picked);
   }
 
-  Future<LunarPickResult?> _showLunarDatePicker() async {
+  Future<LunarPickResult?> _showLunarDatePicker(BuildContext ctx) async {
     // 简单年份/月份/日滑块选择，最终 { solar DateTime, isLeapMonth }。
     int year = _date.year;
     // 先确定 _date 对应农历月日
@@ -134,86 +168,114 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
     int day = defaultLunar.day;
     bool isLeap = defaultLunar.isLeapMonth;
 
-    return showModalBottomSheet<LunarPickResult>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: StatefulBuilder(
-            builder: (ctx, setSt) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                            onPressed:
-                                year > 1900 ? () => setSt(() => year--) : null,
-                            icon: const Icon(Icons.chevron_left)),
-                        Text('农历 $year 年',
-                            style: Theme.of(ctx).textTheme.titleMedium),
-                        IconButton(
-                            onPressed:
-                                year < 2100 ? () => setSt(() => year++) : null,
-                            icon: const Icon(Icons.chevron_right)),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: [
-                        for (int m = 1; m <= 12; m++)
-                          ChoiceChip(
-                            label: Text(LunarUtils.lunarMonthName(m)),
-                            selected: month == m && !isLeap,
-                            onSelected: (_) =>
-                                setSt(() { month = m; isLeap = false; }),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 110,
-                      child: GridView.builder(
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 6,
-                          mainAxisSpacing: 4,
-                          crossAxisSpacing: 4,
+    return AppSheet.show<LunarPickResult>(
+      context: ctx,
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (sheetCtx, setSt) {
+            return Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      AppTapIcon(
+                          onPressed:
+                              year > 1900 ? () => setSt(() => year--) : null,
+                          icon: const HiuiIcon(HiuiIcons.chevronLeft)),
+                      MiuixText('农历 $year 年',
+                          style: MiuixTheme.of(sheetCtx).textStyles.title3),
+                      AppTapIcon(
+                          onPressed:
+                              year < 2100 ? () => setSt(() => year++) : null,
+                          icon: const HiuiIcon(HiuiIcons.chevronRight)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (int mi = 1; mi <= 12; mi++)
+                        AppChip(
+                          label: MiuixText(LunarUtils.lunarMonthName(mi)),
+                          selected: month == mi && !isLeap,
+                          onSelected: (_) =>
+                              setSt(() { month = mi; isLeap = false; }),
                         ),
-                        itemCount: 30,
-                        itemBuilder: (ctx, i) {
-                          final d = i + 1;
-                          return ChoiceChip(
-                            label: Text(LunarUtils.lunarDayName(d),
-                                style: const TextStyle(fontSize: 12)),
-                            selected: day == d,
-                            onSelected: (_) => setSt(() => day = d),
-                          );
-                        },
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 110,
+                    child: GridView.builder(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 6,
+                        mainAxisSpacing: 4,
+                        crossAxisSpacing: 4,
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: () {
-                        final sol = _safeLunarToSolar(year, month, day, isLeap);
-                        Navigator.pop(ctx,
-                            LunarPickResult(solar: sol, isLeap: isLeap));
+                      itemCount: 30,
+                      itemBuilder: (ctx, i) {
+                        final d = i + 1;
+                        return AppChip(
+                          label: MiuixText(LunarUtils.lunarDayName(d),
+                              style: MiuixTheme.of(context)
+                                  .textStyles
+                                  .footnote2
+                                  .copyWith(fontSize: 12)),
+                          selected: day == d,
+                          onSelected: (_) => setSt(() => day = d),
+                        );
                       },
-                      child: const Text('确认'),
                     ),
-                  ],
-                ),
-              );
-            },
-          ),
+                  ),
+                  const SizedBox(height: 12),
+                  AppButton(
+                    onPressed: () {
+                      final sol = _safeLunarToSolar(year, month, day, isLeap);
+                      AppSheet.close<LunarPickResult>(
+                          sheetCtx, LunarPickResult(solar: sol, isLeap: isLeap));
+                    },
+                    child: MiuixText('确认'),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
+  }
+
+  /// 重复规则选择：底部抽屉单选（保留现有规则枚举与计算逻辑）。
+  Future<void> _pickRepeat() async {
+    final ctx = _pageCtx;
+    if (ctx == null) return;
+    final current = _repeatIndex;
+    final selected = await AppSheet.show<int>(
+      context: ctx,
+      title: '重复',
+      builder: (sheetCtx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (int i = 0; i < _repeatLabels.length; i++)
+            MiuixRadioButtonPreference(
+              title: _repeatLabels[i],
+              selected: i == current,
+              onClick: () => AppSheet.close<int>(sheetCtx, i),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    setState(() {
+      _repeatIndex = selected;
+      if (selected == 0) _interval = 1;
+    });
   }
 
   String get _dateLabel {
@@ -290,137 +352,115 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const AppScaffold(body: Center(child: AppCircleProgress()));
     }
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isNew ? '新建纪念日' : '编辑纪念日'),
+    return AppScaffold(
+      topBar: AppHeader(
+        title: _isNew ? '新建纪念日' : '编辑纪念日',
         actions: [
-          IconButton(
-            icon: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.check),
+          AppTapIcon(
+            icon: const HiuiIcon(HiuiIcons.check),
             onPressed: _save,
           ),
         ],
       ),
-      body: _list(context, scheme),
+      content: (context, padding) => Builder(builder: (hostCtx) {
+        _hostCtx = hostCtx;
+        return _list(hostCtx, padding);
+      }),
     );
   }
 
-  final bool _saving = false;
-
-  Widget _list(BuildContext context, ColorScheme scheme) {
+  Widget _list(BuildContext context, EdgeInsets padding) {
+    final colors = MiuixTheme.of(context).colors;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      // 含输入框：MiuixScaffold 不做键盘避让，把 viewInsets 并入底部 padding。
+      padding: padding
+          .add(const EdgeInsets.all(16))
+          .add(EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom)),
       children: [
         // 标题
-        TextField(
+        AppInput(
           controller: _title,
-          decoration: const InputDecoration(
-            labelText: '名称',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.title),
-          ),
+          label: '名称',
+          leadingIcon: const HiuiIcon(HiuiIcons.heading),
         ),
         const SizedBox(height: 12),
-        // 日历类型
-        SegmentedButton<bool>(
-          segments: const [
-            ButtonSegment(value: false, label: Text('公历')),
-            ButtonSegment(value: true, label: Text('农历')),
-          ],
-          selected: {_lunar},
-          onSelectionChanged: (s) => setState(() => _lunar = s.first),
+        // 日历类型（公历 / 农历）
+        MiuixTabRowWithContour(
+          tabs: const ['公历', '农历'],
+          selectedTabIndex: _lunar ? 1 : 0,
+          onTabSelected: (i) => setState(() => _lunar = i == 1),
         ),
         const SizedBox(height: 12),
         // 日期选择
-        ListTile(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(Md3eTokens.radiusCard)),
-          tileColor: scheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          leading:
-              Icon(Icons.event, color: scheme.primary),
-          title: Text(_dateLabel),
-          subtitle: Text(_lunar ? '农历日期' : '公历日期'),
-          trailing: const Icon(Icons.edit_calendar_outlined),
+        AppListRow(
+          leading: HiuiIcon(HiuiIcons.calendar, color: colors.primary),
+          title: MiuixText(_dateLabel),
+          subtitle: MiuixText(_lunar ? '农历日期' : '公历日期'),
+          trailing: const HiuiIcon(HiuiIcons.calendar),
           onTap: _pickDate,
         ),
         const SizedBox(height: 16),
-        // 重复类型
-        Text('重复', style: Theme.of(context).textTheme.titleSmall),
+        // 重复类型（底部抽屉单选）
+        MiuixText('重复', style: MiuixTheme.of(context).textStyles.body2),
         const SizedBox(height: 4),
-        Wrap(
-          spacing: 8,
-          children: [
-            for (int i = 0; i < _repeatLabels.length; i++)
-              ChoiceChip(
-                label: Text(_repeatLabels[i]),
-                selected: _repeatIndex == i,
-                onSelected: (_) => setState(() {
-                  _repeatIndex = i;
-                  if (i == 0) _interval = 1;
-                }),
-              ),
-          ],
+        AppListRow(
+          leading: HiuiIcon(HiuiIcons.repeat, color: colors.primary),
+          title: MiuixText(_repeatLabels[_repeatIndex]),
+          subtitle: const MiuixText('选择重复规则'),
+          onTap: _pickRepeat,
         ),
         if (_repeatIndex != 0) ...[
           const SizedBox(height: 12),
           Row(
             children: [
-              const Text('间隔'),
+              MiuixText('间隔'),
               const SizedBox(width: 12),
               Expanded(
-                child: Slider(
+                child: MiuixSlider(
                   value: _interval.toDouble(),
                   min: 1,
                   max: _repeatIndex == 3 ? 52 : (_repeatIndex == 2 ? 12 : 50),
-                  divisions: _repeatIndex == 3
+                  steps: _repeatIndex == 3
                       ? 51
                       : (_repeatIndex == 2 ? 11 : 49),
-                  label: '$_interval',
-                  onChanged: (v) => setState(() => _interval = v.round()),
+                  onValueChanged: (v) => setState(() => _interval = v.round()),
                 ),
               ),
-              Text('每 $_interval ${_repeatLabels[_repeatIndex].replaceAll("每", "").replaceAll("不重复", "年")}'),
+              MiuixText('每 $_interval ${_repeatLabels[_repeatIndex].replaceAll("每", "").replaceAll("不重复", "年")}'),
             ],
           ),
         ],
         const SizedBox(height: 16),
         // 包含起始日开关
-        SwitchListTile(
+        MiuixSwitchPreference(
           value: _includeStart,
           onChanged: (v) => setState(() => _includeStart = v),
-          title: const Text('正数天数包含起始日'),
-          subtitle: const Text('开启后，未来目标天数会 +1（如 1 天后显示为 2 天）'),
+          title: '正数天数包含起始日',
+          summary: '开启后，未来目标天数会 +1（如 1 天后显示为 2 天）',
         ),
         const SizedBox(height: 16),
         // 卡片文本（备注标签）
         Row(
           children: [
-            const Icon(Icons.label_outline, size: 20),
+            const HiuiIcon(HiuiIcons.tag, size: 20),
             const SizedBox(width: 8),
-            Text('卡片文本（备注标签）',
-                style: Theme.of(context).textTheme.titleSmall),
+            MiuixText('卡片文本（备注标签）',
+                style: MiuixTheme.of(context).textStyles.body2),
           ],
         ),
         const SizedBox(height: 8),
-        TextField(
+        AppInput(
           controller: _note,
           maxLines: 2,
-          decoration: const InputDecoration(
-            hintText: '显示在卡片上的文本（如"生日""纪念日"）',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.edit_outlined),
-          ),
+          hintText: '显示在卡片上的文本（如"生日""纪念日"）',
+          leadingIcon: const HiuiIcon(HiuiIcons.edit),
         ),
         const SizedBox(height: 16),
         // 预览
-        Card(
+        MiuixSurface(
+          cornerRadius: AppTokens.radiusCard,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Builder(builder: (ctx) {
@@ -442,20 +482,20 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('预览',
-                      style: Theme.of(ctx).textTheme.labelMedium),
+                  MiuixText('预览',
+                      style: MiuixTheme.of(ctx).textStyles.footnote1),
                   const SizedBox(height: 8),
                   Center(
-                    child: Text(
+                    child: MiuixText(
                       calc.isToday
                           ? '就是今天'
                           : (calc.isUpcoming
                               ? '还有 ${calc.count} 天'
                               : '已过 ${calc.absCount} 天'),
                       style:
-                          Theme.of(ctx).textTheme.headlineLarge?.copyWith(
+                          MiuixTheme.of(ctx).textStyles.title1.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: scheme.primary,
+                                color: colors.primary,
                               ),
                     ),
                   ),
@@ -463,12 +503,12 @@ class _AnniversaryEditPageState extends ConsumerState<AnniversaryEditPage> {
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.only(top: 4),
-                        child: Text(
+                        child: MiuixText(
                           calc.targetLabel,
-                          style: Theme.of(ctx)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          style: MiuixTheme.of(ctx)
+                              .textStyles
+                              .body1
+                              .copyWith(color: colors.onSurfaceVariantSummary),
                         ),
                       ),
                     ),

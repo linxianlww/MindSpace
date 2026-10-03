@@ -28,22 +28,11 @@ class MemoScopedTheme extends StatelessWidget {
   Widget build(BuildContext context) {
     if (colorValue == null) return child;
     final seed = Color(colorValue!);
-    final ColorScheme scheme = useMd3eDualSeed
-        ? AppTheme.dualSeedScheme(
-            seed: seed,
-            secondarySeed: _deriveSecondary(seed),
-            brightness: brightness,
-          )
-        : ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+    final ColorScheme scheme =
+        ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
     final ThemeData base = brightness == Brightness.dark
         ? AppTheme.dark(scheme)
         : AppTheme.light(scheme);
     return Theme(data: base, child: child);
-  }
-
-  /// 由主种子派生一个协调的次种子（色相+33°），使 secondary / tertiary 有足够对比。
-  static Color _deriveSecondary(Color seed) {
-    final hsl = HSLColor.fromColor(seed);
-    return hsl.withHue((hsl.hue + 33) % 360).toColor();
   }
 }

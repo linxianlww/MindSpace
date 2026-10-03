@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
-
-import '../../../core/theme/md3e_tokens.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 /// 颜色选择器的返回结果。
 /// [value] 为 null 表示"清除颜色"，result 本身为 null 表示"取消"。
@@ -38,76 +36,76 @@ class ColorPickerSheet extends StatelessWidget {
     0xFF455A64,
   ];
 
+  /// [context] 必须位于 [AppScaffold] 子树内（页面级调用请传脚手架下方
+  /// 的 context，否则找不到弹层宿主）。
   static Future<ColorPickResult?> show(BuildContext context, {int? current}) {
-    return showModalBottomSheet<ColorPickResult?>(
+    return AppSheet.show<ColorPickResult?>(
       context: context,
-      // 横屏下内容可能超出默认高度，允许占满全屏并内部滚动。
-      isScrollControlled: true,
+      title: '选择颜色',
       builder: (_) => ColorPickerSheet(selected: current),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    // 键盘与底部安全区由 MiuixOverlayBottomSheet 处理，这里只补
+    // 底部安全区之上的留白（SafeArea 不与库的 viewInsets 叠加冲突）。
     return SafeArea(
+      top: false,
       child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          // 避免键盘等 insets 遮挡。
-          bottom: 16 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('选择颜色', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              GridView.count(
-                crossAxisCount: 6,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                children: [
-                  for (final c in _colors)
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () =>
-                          Navigator.pop(context, ColorPickResult.color(c)),
-                      child: CircleAvatar(
-                        backgroundColor: Color(c),
-                        child: selected == c
-                            ? const Icon(Icons.check, color: Colors.white)
-                            : null,
-                      ),
+        padding: const EdgeInsets.only(top: 4, bottom: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              crossAxisCount: 6,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              children: [
+                for (final c in _colors)
+                  // 色块：MiuixSurface 承载（squircle 圆角 + 按压反馈，
+                  // 替代裸 GestureDetector + AppAvatar 组合）
+                  MiuixSurface(
+                    onPressed: () => AppSheet.close(
+                        context, ColorPickResult.color(c)),
+                    cornerRadius: 20,
+                    color: Color(c),
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: selected == c
+                          // 白色勾为色块前景的功能性硬编码
+                          ? const HiuiIcon(HiuiIcons.check,
+                              color: Colors.white, size: 20)
+                          : null,
                     ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  TextButton(
-                    onPressed: () =>
-                        Navigator.pop(context, const ColorPickResult.clear()),
-                    child: const Text('清除颜色'),
                   ),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(Md3eTokens.radiusBar)),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                AppButton(
+                  variant: AppButtonStyle.text,
+                  onPressed: () => AppSheet.close(
+                      context, const ColorPickResult.clear()),
+                  child: MiuixText('清除颜色',
+                      style: TextStyle(
+                          color: MiuixTheme.of(context).colors.error)),
+                ),
+                // 取消是最次级动作，不做主视觉强调
+                AppButton(
+                  variant: AppButtonStyle.outlined,
+                  onPressed: () => AppSheet.close(context),
+                  child: const MiuixText('取消'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

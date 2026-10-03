@@ -14,6 +14,15 @@ class SystemPinChannel {
   static const MethodChannel _channel =
       MethodChannel('neko.box/secure_pin');
 
+  /// 系统凭证验证成功次数（每次 [show] 返回 true 自增）。
+  ///
+  /// 用途：verify 对话框在系统凭证（含设备指纹/面容）通过后只负责关闭
+  /// 自身，不会回调调用方的 onVerify/onBiometricTap；调用方无法直接拿到
+  /// 该结果。页面层可在打开对话框前后对比本计数，识别「对话框存续期间
+  /// 发生过一次成功的系统凭证验证」，从而补齐解锁等后置动作。
+  static int _verificationCount = 0;
+  static int get verificationCount => _verificationCount;
+
   /// 是否可以在设备上弹出系统凭证界面（锁屏已设置）。
   static Future<bool> isAvailable() async {
     try {
@@ -45,7 +54,9 @@ class SystemPinChannel {
         'subtitle': subtitle ?? '',
         'expectedPin': userPin ?? '',
       });
-      return ok ?? false;
+      final verified = ok ?? false;
+      if (verified) _verificationCount++;
+      return verified;
     } on PlatformException {
       return false;
     } on MissingPluginException {

@@ -1,11 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../core/di/providers.dart';
-import '../../core/theme/md3e_tokens.dart';
-import '../../core/widgets/md3e_switch.dart';
 
-/// 主题设置：浅色/深色/跟随系统、动态取色开关、种子色（仅预设色板）。
+/// 主题设置：浅色 / 深色 / 跟随系统。
+///
+/// 配色固定为 MIUIX 默认 HyperOS 蓝，无动态取色与主题色设置。
 class ThemeSettingsPage extends ConsumerWidget {
   const ThemeSettingsPage({super.key});
 
@@ -13,90 +13,39 @@ class ThemeSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final isBrandDefault = settings.seedColorValue == null;
+    final colors = MiuixTheme.of(context).colors;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('主题设置')),
-      body: ListView(
+    return AppScaffold(
+      topBar: AppHeader(title: '主题设置'),
+      content: (context, padding) => ListView(
+        padding: padding,
         children: [
-          RadioGroup<ThemeMode>(
-            groupValue: settings.themeMode,
-            onChanged: (m) {
-              if (m != null) notifier.setThemeMode(m);
-            },
-            child: Column(
-              children: [
-                for (final mode in ThemeMode.values)
-                  RadioListTile<ThemeMode>(
-                    value: mode,
-                    title: Text(switch (mode) {
-                      ThemeMode.light => '浅色',
-                      ThemeMode.dark => '深色',
-                      ThemeMode.system => '跟随系统',
-                    }),
-                    secondary: Icon(switch (mode) {
-                      ThemeMode.light => Icons.light_mode_outlined,
-                      ThemeMode.dark => Icons.dark_mode_outlined,
-                      ThemeMode.system => Icons.smartphone_outlined,
-                    }),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(),
-          Md3eSwitchListTile(
-            leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('动态取色'),
-            subtitle: const Text('Android 12+ 从壁纸取色（Material You）'),
-            value: settings.useDynamicColor,
-            onChanged: notifier.setDynamicColor,
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => notifier.setSeedColor(null),
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('恢复品牌默认（亮橙 · 红）'),
-            ),
-          ),
+          MiuixSmallTitle('外观模式'),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text('种子色（关闭动态取色时生效）',
-                style: Theme.of(context).textTheme.titleSmall),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final e in Md3eTokens.seedPalette.entries)
-                  GestureDetector(
-                    onTap: () => notifier.setSeedColor(e.value.toARGB32()),
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: e.value,
-                      child: (isBrandDefault &&
-                                  e.value.toARGB32() ==
-                                      Md3eTokens.brandSeed.toARGB32()) ||
-                              settings.seedColorValue == e.value.toARGB32()
-                          ? const Icon(Icons.check, color: Colors.white)
-                          : null,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MiuixSurface(
+              cornerRadius: AppTokens.radiusMedium,
+              color: colors.surfaceContainer,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 注意 onClick 恒为非空：传 null 会让选中行的 radio 进入
+                  // 禁用配色（对勾发淡）。
+                  for (final mode in ThemeMode.values)
+                    MiuixRadioButtonPreference(
+                      title: switch (mode) {
+                        ThemeMode.light => '浅色',
+                        ThemeMode.dark => '深色',
+                        ThemeMode.system => '跟随系统',
+                      },
+                      selected: settings.themeMode == mode,
+                      onClick: () => notifier.setThemeMode(mode),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              isBrandDefault
-                  ? '当前：品牌默认（亮橙 · 红，符合 MD3E 双种子取色）'
-                  : '当前：预设色',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-          ),
+          const SizedBox(height: 24),
         ],
       ),
     );

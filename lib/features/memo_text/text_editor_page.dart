@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,10 +41,10 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     final async = ref.watch(textEditorProvider(widget.memoId));
     return async.when(
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(
-        appBar: AppBar(),
-        body: Center(child: Text('加载失败：$e')),
+          const AppScaffold(body: Center(child: AppCircleProgress())),
+      error: (e, _) => AppScaffold(
+        topBar: const AppHeader(),
+        body: Center(child: MiuixText('加载失败：$e')),
       ),
       data: (data) {
         final settings = ref.watch(settingsProvider);
@@ -54,109 +54,85 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
           onPopInvokedWithResult: (didPop, _) {
             if (didPop) _save();
           },
-          child: Scaffold(
-            appBar: AppBar(
-              title: GestureDetector(
-                onTap: () => _rename(data),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(memo.title,
-                          maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ),
-                    const Icon(Icons.edit, size: 16),
-                  ],
-                ),
-              ),
+          child: AppScaffold(
+            topBar: AppHeader(
+              title: memo.title,
+              alwaysSmall: true,
               actions: [
-                // 编辑页右上角只有「更多」三点菜单 + 保存按钮；
-                // 颜色 / 标签 / 字体 / 分享全部收敛至三级菜单。
-                PopupMenuButton<String>(
-                  tooltip: '更多',
-                  onSelected: (v) => _menu(v, data),
-                  itemBuilder: (_) => [
-                    PopupMenuItem(
-                        value: 'color',
-                        enabled: false,
-                        child: Row(
-                          children: [
-                            Icon(Icons.palette_outlined,
-                                size: 18,
-                                color: memo.color != null
-                                    ? Color(memo.color!)
-                                    : Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 10),
-                            const Text('卡片颜色'),
-                          ],
-                        )),
-                    PopupMenuItem(
-                      value: 'set_color',
-                      onTap: () => WidgetsBinding.instance
-                          .addPostFrameCallback((_) => _setMemoColor(data)),
-                      child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('修改颜色'),
+                // 顶栏子树的 context：菜单动作的弹层（选色/备注/字体/
+                // 桌面快捷方式）需要 MiuixScaffold 之下的宿主 context。
+                Builder(builder: (menuCtx) {
+                  return MiuixOverlayIconDropdownMenu(
+                    entry: MiuixDropdownEntry(items: [
+                      MiuixDropdownItem(
+                        text: '重命名',
+                        icon: const HiuiIcon(HiuiIcons.edit, size: 18),
+                        onClick: () => _rename(menuCtx, data),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: 'clear_color',
-                      enabled: memo.color != null,
-                      onTap: () => WidgetsBinding.instance
-                          .addPostFrameCallback((_) => _clearMemoColor(data)),
-                      child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('清除颜色'),
+                      MiuixDropdownItem(
+                        text: '修改颜色',
+                        icon: HiuiIcon(HiuiIcons.skin,
+                            size: 18,
+                            color: memo.color != null
+                                ? Color(memo.color!)
+                                : MiuixTheme.of(menuCtx).colors.primary),
+                        onClick: () => _setMemoColor(menuCtx, data),
                       ),
-                    ),
-                    PopupMenuItem(
-                        value: 'label',
-                        enabled: false,
-                        child: Row(
-                          children: [
-                            const Icon(Icons.label_outline, size: 18),
-                            const SizedBox(width: 10),
-                            Text(memo.remark == null ? '备注标签' : memo.remark!),
-                          ],
-                        )),
-                    PopupMenuItem(
-                      value: 'edit_label',
-                      onTap: () => WidgetsBinding.instance
-                          .addPostFrameCallback((_) => _editRemark(data)),
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 28),
-                        child: Text(memo.remark == null ? '设置标签' : '修改标签'),
+                      MiuixDropdownItem(
+                        text: '清除颜色',
+                        enabled: memo.color != null,
+                        icon: HiuiIcon(HiuiIcons.clear,
+                            size: 18,
+                            color: memo.color == null
+                                ? MiuixTheme.of(menuCtx).colors.disabledOnSurface
+                                : MiuixTheme.of(menuCtx).colors.onSurface),
+                        onClick: memo.color == null
+                            ? null
+                            : () => _clearMemoColor(data),
                       ),
-                    ),
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                        value: 'font', child: Text('字体')),
-                    const PopupMenuItem(
-                        value: 'share_text', child: Text('分享为文本')),
-                    const PopupMenuItem(
-                        value: 'share_image', child: Text('分享为图片')),
-                    const PopupMenuItem(
-                        value: 'share_file', child: Text('分享为文件')),
-                    PopupMenuItem(
-                      value: 'desktop_shortcut',
-                      onTap: () => WidgetsBinding.instance
-                          .addPostFrameCallback((_) => addMemoToDesktop(context, ref, memo)),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.add_to_home_screen, size: 18),
-                          SizedBox(width: 10),
-                          Text('添加到桌面'),
-                        ],
+                      MiuixDropdownItem(
+                        text: memo.remark == null ? '设置标签' : '修改标签',
+                        icon: const HiuiIcon(HiuiIcons.tag, size: 18),
+                        onClick: () => _editRemark(menuCtx, data),
                       ),
-                    ),
-                  ],
-                ),
-                IconButton(
+                      MiuixDropdownItem(
+                        text: '字体',
+                        icon: const HiuiIcon(HiuiIcons.font,
+                            size: 18),
+                        onClick: () => _pickFont(menuCtx, data),
+                      ),
+                      MiuixDropdownItem(
+                        text: '分享为文本',
+                        icon: const HiuiIcon(HiuiIcons.document, size: 18),
+                        onClick: () => _menuAction('share_text', data),
+                      ),
+                      MiuixDropdownItem(
+                        text: '分享为图片',
+                        icon: const HiuiIcon(HiuiIcons.image, size: 18),
+                        onClick: () => _menuAction('share_image', data),
+                      ),
+                      MiuixDropdownItem(
+                        text: '分享为文件',
+                        icon: const HiuiIcon(HiuiIcons.document,
+                            size: 18),
+                        onClick: () => _menuAction('share_file', data),
+                      ),
+                      MiuixDropdownItem(
+                        text: '添加到桌面',
+                        icon: const HiuiIcon(HiuiIcons.export, size: 18),
+                        onClick: () => addMemoToDesktop(menuCtx, ref, memo),
+                      ),
+                    ]),
+                    child: const HiuiIcon(HiuiIcons.more),
+                  );
+                }),
+                AppTapIcon(
                   icon: data.saving
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.check),
+                          child: AppCircleProgress())
+                      : const HiuiIcon(HiuiIcons.check),
                   onPressed: () async {
                     await _save();
                     if (context.mounted) context.pop();
@@ -164,44 +140,50 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
                 ),
               ],
             ),
-            body: Column(
-              children: [
-                Expanded(
-                  child: Center(
-                    // 横屏平板等宽屏下限制正文宽度并居中，避免行长过长影响阅读；
-                    // 1:1 小屏/竖屏手机时自动占满可用宽度。
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 840),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ColoredBox(
-                          color: Theme.of(context).colorScheme.surface,
-                          child: QuillEditor.basic(
-                            focusNode: _focus,
-                            controller: data.controller,
-                            config: QuillEditorConfig(
-                              expands: true,
-                              placeholder: '开始书写…',
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                              customStyles:
-                                  _styles(context, data.fontFamily,
-                                      settings.lineHeight,
-                                      settings.paragraphSpacing),
+            content: (context, padding) {
+              // MiuixScaffold 不会自动做键盘避让：顶栏高度由 padding.top
+              // 消化，键盘高度由 viewInsets.bottom 消化（工具栏自身不再补）。
+              return Padding(
+                padding: EdgeInsets.only(
+                  top: padding.top,
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Center(
+                        // 横屏平板等宽屏下限制正文宽度并居中，避免行长过长影响阅读；
+                        // 1:1 小屏/竖屏手机时自动占满可用宽度。
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 840),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: QuillEditor.basic(
+                              focusNode: _focus,
+                              controller: data.controller,
+                              config: QuillEditorConfig(
+                                expands: true,
+                                placeholder: '开始书写…',
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
+                                customStyles: _styles(context, data.fontFamily,
+                                    settings.lineHeight,
+                                    settings.paragraphSpacing),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                    RichToolbar(
+                      controller: data.controller,
+                      onPickColor: () => _textColor(context, data),
+                      onPickFont: () => _pickFont(context, data),
+                    ),
+                  ],
                 ),
-                RichToolbar(
-                  controller: data.controller,
-                  onPickColor: () => _textColor(data),
-                  onPickFont: () => _pickFont(data),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
@@ -216,7 +198,7 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
       fontFamily: family,
       fontSize: 16,
       height: lineHeight,
-      color: Theme.of(context).colorScheme.onSurface,
+      color: MiuixTheme.of(context).colors.onSurface,
     );
     return DefaultStyles(
       paragraph: DefaultTextBlockStyle(
@@ -229,7 +211,9 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     );
   }
 
-  Future<void> _setMemoColor(TextEditorData data) async {
+  /// [context] 必须位于 AppScaffold 子树内（顶栏/content 子树的 context），
+  /// 供选色抽屉找到弹层宿主。
+  Future<void> _setMemoColor(BuildContext context, TextEditorData data) async {
     final r = await ColorPickerSheet.show(context, current: data.memo.color);
     if (r == null) return;
     await ref
@@ -241,7 +225,40 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     await ref.read(textEditorProvider(widget.memoId).notifier).setColor(null);
   }
 
-  Future<void> _editRemark(TextEditorData data) async {
+  Future<void> _rename(BuildContext context, TextEditorData data) async {
+    final memo = data.memo;
+    final ctrl = TextEditingController(text: memo.title);
+    try {
+      final result = await AppDialog.show<String>(
+        context: context,
+        title: '重命名',
+        content: AppInput(
+          controller: ctrl,
+          onChanged: (_) {},
+          hintText: '输入新标题',
+        ),
+        actions: [
+          AppButton(
+              variant: AppButtonStyle.text,
+              onPressed: () => AppDialog.close(context),
+              child: const MiuixText('取消')),
+          AppButton(
+              onPressed: () =>
+                  AppDialog.close<String>(context, ctrl.text.trim()),
+              child: const MiuixText('确定')),
+        ],
+      );
+      if (result != null && result.isNotEmpty && result != memo.title) {
+        await ref.read(memoRepositoryProvider).rename(memo.id, result);
+        ref.invalidate(textEditorProvider(widget.memoId));
+      }
+    } finally {
+      ctrl.dispose();
+    }
+  }
+
+  /// [context] 必须位于 AppScaffold 子树内。
+  Future<void> _editRemark(BuildContext context, TextEditorData data) async {
     final r = await RemarkEditor.show(context, initial: data.memo.remark);
     if (r != null) {
       await ref
@@ -250,12 +267,13 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     }
   }
 
-  Future<void> _textColor(TextEditorData data) async {
+  /// [context] 必须位于 AppScaffold 子树内。
+  Future<void> _textColor(BuildContext context, TextEditorData data) async {
     final r = await ColorPickerSheet.show(context);
     // 取消（null）不做任何处理。
     if (r == null) return;
     if (r.cleared) {
-      // “清除颜色”：移除选中区域上的 color 属性。
+      // "清除颜色"：移除选中区域上的 color 属性。
       data.controller.formatSelection(Attribute.clone(Attribute.color, null));
       return;
     }
@@ -263,7 +281,9 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
     data.controller.formatSelection(ColorAttribute(hex));
   }
 
-  Future<void> _pickFont(TextEditorData data) async {
+  /// [context] 必须位于 AppScaffold 子树内。
+  Future<void> _pickFont(
+      BuildContext context, TextEditorData data) async {
     await FontPicker.show(context, ref,
         currentFontId: data.memo.fontId,
         onPicked: (font) => ref
@@ -271,38 +291,9 @@ class _TextEditorPageState extends ConsumerState<TextEditorPage> {
             .applyFont(font));
   }
 
-  Future<void> _rename(TextEditorData data) async {
-    final ctrl = TextEditingController(text: data.memo.title);
-    try {
-      final name = await showDialog<String>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('重命名'),
-          content: TextField(controller: ctrl, autofocus: true),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-                child: const Text('确定')),
-          ],
-        ),
-      );
-      if (name != null && name.isNotEmpty) {
-        await ref
-            .read(textEditorProvider(widget.memoId).notifier)
-            .save(title: name);
-      }
-    } finally {
-      ctrl.dispose();
-    }
-  }
-
-  Future<void> _menu(String value, TextEditorData data) async {
+  Future<void> _menuAction(String value, TextEditorData data) async {
     final share = ref.read(shareServiceProvider);
     switch (value) {
-      case 'font':
-        _pickFont(data);
       case 'share_text':
         await _save();
         share.shareText(data.controller.document.toPlainText());

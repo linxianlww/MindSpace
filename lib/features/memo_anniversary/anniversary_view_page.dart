@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,122 +22,92 @@ class AnniversaryViewPage extends ConsumerWidget {
     final memoAsync = ref.watch(memoDetailProvider(memoId));
 
     return memoAsync.when(
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
+      loading: () => const AppScaffold(
+        body: Center(child: AppCircleProgress()),
+      ),
+      error: (e, _) => AppScaffold(body: Center(child: MiuixText('$e'))),
       data: (memo) {
         if (memo == null) {
-          return const Scaffold(body: Center(child: Text('铭记不存在')));
+          return const AppScaffold(body: Center(child: MiuixText('铭记不存在')));
         }
         final cfg = AnniversaryConfig.fromMemo(memo);
         final calc = computeAnniversary(cfg);
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(memo.title,
-                maxLines: 1, overflow: TextOverflow.ellipsis),
+        return AppScaffold(
+          topBar: AppHeader(
+            title: memo.title,
+            alwaysSmall: true,
             actions: [
-              PopupMenuButton<String>(
-                tooltip: '更多',
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                      value: 'color',
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          Icon(Icons.palette_outlined,
-                              size: 18,
-                              color: memo.color != null
-                                  ? Color(memo.color!)
-                                  : Theme.of(context).colorScheme.primary),
-                          const SizedBox(width: 10),
-                          const Text('卡片颜色'),
-                        ],
-                      )),
-                  PopupMenuItem(
-                    value: 'set_color',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) => _setMemoColor(context, ref, memo)),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('修改颜色')),
-                  ),
-                  PopupMenuItem(
-                    value: 'clear_color',
-                    enabled: memo.color != null,
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) async {
-                      await ref
-                          .read(memoRepositoryProvider)
-                          .setAppearance(memo.id, color: null);
-                      ref.invalidate(memoDetailProvider(memo.id));
-                    }),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('清除颜色')),
-                  ),
-                  PopupMenuItem(
-                      value: 'label',
-                      enabled: false,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.label_outline, size: 18),
-                          const SizedBox(width: 10),
-                          Text(memo.remark?.isNotEmpty == true
-                              ? memo.remark!
-                              : '备注标签'),
-                        ],
-                      )),
-                  PopupMenuItem(
-                    value: 'edit_label',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback(
-                            (_) => _editRemark(context, ref, memo)),
-                    child: const Padding(
-                        padding: EdgeInsets.only(left: 28),
-                        child: Text('修改标签')),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(
-                    value: 'edit_text',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback(
-                            (_) => _editRemark(context, ref, memo)),
-                    child: const Text('编辑卡片文本'),
-                  ),
-                  PopupMenuItem(
-                    value: 'edit',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) {
-                      if (context.mounted) {
-                        context.push('/memo/anniversary/$memoId/edit');
-                      }
-                    }),
-                    child: const Text('编辑设置'),
-                  ),
-                  PopupMenuItem(
-                    value: 'desktop_shortcut',
-                    onTap: () => WidgetsBinding.instance
-                        .addPostFrameCallback((_) => addMemoToDesktop(context, ref, memo)),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.add_to_home_screen, size: 18),
-                        SizedBox(width: 10),
-                        Text('添加到桌面'),
-                      ],
+              // 顶栏子树的 context：菜单动作的弹层（选色/备注/桌面快捷方式）
+              // 需要 MiuixScaffold 之下的宿主 context。
+              Builder(builder: (menuCtx) {
+                final colors = MiuixTheme.of(menuCtx).colors;
+                return MiuixOverlayIconDropdownMenu(
+                  entry: MiuixDropdownEntry(items: [
+                    MiuixDropdownItem(
+                      text: '重命名',
+                      icon: const HiuiIcon(HiuiIcons.edit, size: 18),
+                      onClick: () => _rename(menuCtx, ref, memo),
                     ),
-                  ),
-                ],
-              ),
+                    MiuixDropdownItem(
+                      text: '修改颜色',
+                      icon: HiuiIcon(HiuiIcons.skin,
+                          size: 18,
+                          color: memo.color != null
+                              ? Color(memo.color!)
+                              : colors.primary),
+                      onClick: () => _setMemoColor(menuCtx, ref, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '清除颜色',
+                      enabled: memo.color != null,
+                      icon: HiuiIcon(HiuiIcons.clear,
+                          size: 18,
+                          color: memo.color == null
+                              ? colors.disabledOnSurface
+                              : colors.onSurface),
+                      onClick: memo.color == null
+                          ? null
+                          : () => _clearMemoColor(ref, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '修改标签',
+                      icon: const HiuiIcon(HiuiIcons.edit, size: 18),
+                      onClick: () => _editRemark(menuCtx, ref, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '编辑卡片文本',
+                      icon: const HiuiIcon(HiuiIcons.document, size: 18),
+                      // 修复：原实现误调 _setMemoColor（复制粘贴错误），
+                      // 编辑卡片文本即编辑备注标签。
+                      onClick: () => _editRemark(menuCtx, ref, memo),
+                    ),
+                    MiuixDropdownItem(
+                      text: '编辑设置',
+                      icon: const HiuiIcon(HiuiIcons.settings, size: 18),
+                      onClick: () =>
+                          menuCtx.push('/memo/anniversary/$memoId/edit'),
+                    ),
+                    MiuixDropdownItem(
+                      text: '添加到桌面',
+                      icon: const HiuiIcon(HiuiIcons.export, size: 18),
+                      onClick: () => addMemoToDesktop(menuCtx, ref, memo),
+                    ),
+                  ]),
+                  child: const HiuiIcon(HiuiIcons.more),
+                );
+              }),
             ],
           ),
-          body: _body(context, ref, memo, calc),
+          content: (context, padding) =>
+              _body(context, ref, memo, calc, padding),
         );
       },
     );
   }
 
-  Widget _body(BuildContext context, WidgetRef ref, Memo memo, AnniversaryCalc calc) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget _body(BuildContext context, WidgetRef ref, Memo memo,
+      AnniversaryCalc calc, EdgeInsets padding) {
+    final colors = MiuixTheme.of(context).colors;
 
     // 天数格式化：>0"还有 N 天"，=0"就是今天！"，<0"已过 N 天"。
     final countText = calc.isToday
@@ -147,39 +117,38 @@ class AnniversaryViewPage extends ConsumerWidget {
     final hintText = calc.count > 0
         ? '还有'
         : (calc.count < 0 ? '已过' : '');
-    final accentColor = memo.colorValue ?? scheme.primary;
+    final accentColor = memo.colorValue ?? colors.primary;
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: padding.add(const EdgeInsets.symmetric(horizontal: 24, vertical: 16)),
       children: [
         const SizedBox(height: 12),
-        // 备注标签（可点击编辑）
+        // 备注标签（可点击编辑）：MiuixSurface 单层承载，避免嵌套自绘。
         if (memo.remark != null && memo.remark!.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap: () => _editRemark(context, ref, memo),
-                child: Container(
+              child: MiuixSurface(
+                cornerRadius: AppTokens.radiusSmall,
+                color: colors.secondaryContainer.withValues(alpha: 0.55),
+                onPressed: () => _editRemark(context, ref, memo),
+                child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: scheme.secondaryContainer.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      MiuixText(
                         memo.remark!,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: scheme.onSecondaryContainer),
+                        style: MiuixTheme.of(context)
+                            .textStyles
+                            .footnote1
+                            .copyWith(color: colors.onSecondaryContainer),
                       ),
                       const SizedBox(width: 4),
-                      Icon(Icons.edit,
+                      HiuiIcon(HiuiIcons.edit,
                           size: 14,
-                          color: scheme.onSecondaryContainer
+                          color: colors.onSecondaryContainer
                               .withValues(alpha: 0.6)),
                     ],
                   ),
@@ -190,16 +159,16 @@ class AnniversaryViewPage extends ConsumerWidget {
         const SizedBox(height: 24),
         // 顶数词：「还有」/「已过」
         Center(
-          child: Text(
+          child: MiuixText(
             hintText,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: scheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+            style: MiuixTheme.of(context).textStyles.title3.copyWith(
+                color: colors.onSurfaceVariantSummary, fontWeight: FontWeight.w500),
           ),
         ),
         const SizedBox(height: 8),
         // 大字天数
         Center(
-          child: AnimatedSwitcher(
+          child: AppAnimatedSwitcher(
             duration: const Duration(milliseconds: 280),
             child: Row(
               key: ValueKey<int>(calc.count),
@@ -207,24 +176,24 @@ class AnniversaryViewPage extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(
+                MiuixText(
                   countText,
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                  style: MiuixTheme.of(context).textStyles.title1.copyWith(
                         fontWeight: FontWeight.w800,
                         fontFeatures: const [FontFeature.tabularFigures()],
                         color: calc.isToday
                             ? accentColor
-                            : scheme.onSurface,
+                            : colors.onSurface,
                         height: 1.05,
                       ),
                 ),
                 if (unitText.isNotEmpty) ...[
                   const SizedBox(width: 4),
-                  Text(
+                  MiuixText(
                     unitText,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    style: MiuixTheme.of(context).textStyles.title2.copyWith(
                           fontWeight: FontWeight.w500,
-                          color: scheme.onSurfaceVariant,
+                          color: colors.onSurfaceVariantSummary,
                         ),
                   ),
                 ],
@@ -233,40 +202,38 @@ class AnniversaryViewPage extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // 目标日期
+        // 目标日期 / 重复规则信息行
         Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  calc.targetLabel,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: scheme.onSurface, fontWeight: FontWeight.w600),
-                ),
-                if (calc.repeatLabel.isNotEmpty &&
-                    calc.repeatLabel != '不重复') ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    calc.repeatLabel,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant),
-                  ),
-                ],
-              ],
+          child: MiuixCard(
+            cornerRadius: AppTokens.radiusChip,
+            insideMargin:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: MiuixBasicComponent(
+              title: calc.targetLabel,
+              summary: calc.repeatLabel.isNotEmpty &&
+                      calc.repeatLabel != '不重复'
+                  ? calc.repeatLabel
+                  : null,
+              insideMargin: EdgeInsets.zero,
             ),
           ),
         ),
         const SizedBox(height: 28),
         Center(
-          child: FilledButton.tonalIcon(
+          child: MiuixCard(
+            cornerRadius: AppTokens.radiusBar,
+            insideMargin:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             onPressed: () => _copy(context, memo, calc),
-            icon: const Icon(Icons.copy_rounded, size: 20),
-            label: const Text('复制天数'),
+            feedbackType: MiuixPressFeedbackType.sink,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const HiuiIcon(HiuiIcons.copy, size: 20),
+                const SizedBox(width: 8),
+                MiuixText('复制天数'),
+              ],
+            ),
           ),
         ),
       ],
@@ -280,9 +247,7 @@ class AnniversaryViewPage extends ConsumerWidget {
     final text = '${memo.title} ${calc.isToday ? "就是今天" : (calc.isUpcoming ? "还有 ${calc.count} 天" : "已过 ${calc.absCount} 天")} · $calLabel${calc.targetLabel}';
     await Clipboard.setData(ClipboardData(text: text));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已复制'), duration: Duration(seconds: 1)),
-      );
+      AppSnackbar.show(context, message: '已复制');
     }
   }
 
@@ -296,6 +261,11 @@ class AnniversaryViewPage extends ConsumerWidget {
     ref.invalidate(memoDetailProvider(memo.id));
   }
 
+  static Future<void> _clearMemoColor(WidgetRef ref, Memo memo) async {
+    await ref.read(memoRepositoryProvider).setAppearance(memo.id, color: null);
+    ref.invalidate(memoDetailProvider(memo.id));
+  }
+
   static Future<void> _editRemark(
       BuildContext context, WidgetRef ref, Memo memo) async {
     final r = await RemarkEditor.show(context, initial: memo.remark);
@@ -304,6 +274,38 @@ class AnniversaryViewPage extends ConsumerWidget {
           .read(memoRepositoryProvider)
           .setAppearance(memo.id, remark: r.isEmpty ? null : r);
       ref.invalidate(memoDetailProvider(memo.id));
+    }
+  }
+
+  static Future<void> _rename(
+      BuildContext context, WidgetRef ref, Memo memo) async {
+    final ctrl = TextEditingController(text: memo.title);
+    try {
+      final result = await AppDialog.show<String>(
+        context: context,
+        title: '重命名',
+        content: AppInput(
+          controller: ctrl,
+          onChanged: (_) {},
+          hintText: '输入新标题',
+        ),
+        actions: [
+          AppButton(
+              variant: AppButtonStyle.text,
+              onPressed: () => AppDialog.close(context),
+              child: const MiuixText('取消')),
+          AppButton(
+              onPressed: () =>
+                  AppDialog.close<String>(context, ctrl.text.trim()),
+              child: const MiuixText('确定')),
+        ],
+      );
+      if (result != null && result.isNotEmpty && result != memo.title) {
+        await ref.read(memoRepositoryProvider).rename(memo.id, result);
+        ref.invalidate(memoDetailProvider(memo.id));
+      }
+    } finally {
+      ctrl.dispose();
     }
   }
 }

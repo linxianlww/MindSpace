@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- MD3E 小组件面板背景：radiusCard=26dp 大圆角（原 16dp → 26dp 符合 MD3E） -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#FFFBFE" />
-    <corners android:radius="26dp" />
-</shape>

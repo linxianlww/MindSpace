@@ -12,35 +12,25 @@ import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.FragmentActivity
-import aria.neko.box.widget.WidgetChannelRegistrar
-import aria.neko.box.widget.WidgetClickBus
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * 应用主入口：处理常规启动 + 四种分享入口（文本选择/文本分享/媒体分享/otpauth 链接）+ 桌面小组件回调。
+ * 应用主入口：处理常规启动 + 四种分享入口（文本选择/文本分享/媒体分享/otpauth 链接）。
  *
  * 通道设计：
  *   - MethodChannel("neko.box/share"): Flutter call getInitialShare() 拿冷启动数据
  *                                        persistUri() 把 content:// 持久化到本地
  *   - EventChannel("neko.box/share/events"): 推送给 Flutter 的 SEND/SEND_MULTIPLE/PROCESS_TEXT/VIEW TOTP 事件
- *   - MethodChannel("neko.box/widget"): Flutter call saveWidgetData() 写入小组件显示数据
- *                                         updateWidget() 触发小组件界面刷新
- *                                         getInitialWidgetData() 获取当前小组件数据
- *                                         registerDeepLinkListener() 注册小组件点击监听
- *   - EventChannel("neko.box/widget/events"): 推送给 Flutter 的点击事件（URI）
  *
  * 数据契约（传给 Dart 的 Map）：
  *   action: "process_text" | "send_text" | "send_file" | "send_multiple" | "view_totp"
  *   各 action 对应的键见 ShareReceiverHelper.parse()。
  */
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity：local_auth（生物识别）要求 FragmentActivity 宿主。
+class MainActivity : FlutterFragmentActivity() {
 
     private val methodChannelName = "neko.box/share"
     private val eventChannelName = "neko.box/share/events"
@@ -62,16 +52,9 @@ class MainActivity : FlutterActivity() {
         AppContextResolver.cacheDir = cacheDir
         // 解析冷启动 intent（注入 targetFolderId 若存在）
         pendingShareEvent = ShareReceiverHelper.parse(intent)
-        // 捕获桌面快捷方式或小组件的 deep link（ACTION_VIEW with data URI）
+        // 捕获桌面快捷方式的 deep link（ACTION_VIEW with data URI）
         if (intent?.action == Intent.ACTION_VIEW && intent?.data != null) {
-            val uri = intent.data
-            if (uri?.host == "widget") {
-                // 小组件点击事件 → 暂存供 Flutter 取走（EventChannel 就绪后自动推出）
-                WidgetClickBus.post(uri.toString())
-            } else {
-                // 桌面快捷方式等普通 deep link
-                deepLinkIntent = intent
-            }
+            deepLinkIntent = intent
         }
     }
 
@@ -135,6 +118,19 @@ class MainActivity : FlutterActivity() {
                         result.success(deepLink)
                     }
                     "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
+                    "getStorageInfo" -> {
+                        try {
+                            val stat = android.os.StatFs(android.os.Environment.getDataDirectory().path)
+                            val total = stat.totalBytes
+                            val free = stat.availableBytes
+                            result.success(mapOf(
+                                "totalBytes" to total,
+                                "freeBytes" to free
+                            ))
+                        } catch (e: Exception) {
+                            result.error("ESTAT", e.message, null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -142,22 +138,29 @@ class MainActivity : FlutterActivity() {
         // 私密空间：截屏保护 FLAG_SECURE 控制
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "neko.box/secure_flags")
             .setMethodCallHandler { call, result ->
-                try {
-                    when (call.method) {
-                        "enableSecureFlags" -> {
-                            // 设置 FLAG_SECURE 防截图
-                            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-                            result.success(true)
+                when (call.method) {
+                    "enableSecureFlags" -> {
+                        // FLAG_SECURE 必须在 UI 线程设置
+                        runOnUiThread {
+                            try {
+                                window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("EEXCEPTION", e.message, null)
+                            }
                         }
-                        "disableSecureFlags" -> {
-                            // 清除 FLAG_SECURE
-                            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
-                            result.success(true)
-                        }
-                        else -> result.notImplemented()
                     }
-                } catch (e: Exception) {
-                    result.error("EEXCEPTION", e.message, null)
+                    "disableSecureFlags" -> {
+                        runOnUiThread {
+                            try {
+                                window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.error("EEXCEPTION", e.message, null)
+                            }
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
@@ -195,12 +198,6 @@ class MainActivity : FlutterActivity() {
                     shareEventSink = null
                 }
             })
-
-        // ============================================================
-        // 【桌面小组件】MethodChannel + EventChannel（与配置 Activity 共用注册器）
-        // ============================================================
-        WidgetChannelRegistrar.registerMethodChannel(this, flutterEngine.dartExecutor.binaryMessenger)
-        WidgetChannelRegistrar.registerClickEventChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 
     private fun success(event: Map<String, Any?>?) {
@@ -213,12 +210,7 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.action == Intent.ACTION_VIEW && intent.data != null) {
-            val uri = intent.data
-            if (uri?.host == "widget") {
-                WidgetClickBus.post(uri.toString())
-            } else {
-                deepLinkIntent = intent
-            }
+            deepLinkIntent = intent
         }
         // ★ 私密空间 / 每一次分享都走这个分支：解析 + 入队 EventChannel
         val event = ShareReceiverHelper.parse(intent)
@@ -237,7 +229,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         shareEventSink = null
-        WidgetClickBus.attachSink(null)
         super.onDestroy()
     }
 

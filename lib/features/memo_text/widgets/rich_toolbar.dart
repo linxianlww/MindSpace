@@ -1,10 +1,13 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show Icons;
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
-import '../../../core/theme/md3e_tokens.dart';
-import '../../../core/widgets/floating_toolbar.dart';
-
 /// 文本编辑器键盘弹出时贴底显示的浮动富文本工具栏。
+///
+/// 布局与 `core/widgets/floating_toolbar.dart` 保持一致（毛玻璃卡片 +
+/// 横向滚动 + MiuixIconButton 按钮）；标题层级项为锚定下拉菜单
+/// （[MiuixOverlayIconDropdownMenu]），无法直接复用 [ToolbarItem] 的
+/// IconData 接口，因此在本文件内组装按钮行。
 class RichToolbar extends StatefulWidget {
   const RichToolbar({
     super.key,
@@ -22,6 +25,8 @@ class RichToolbar extends StatefulWidget {
 }
 
 class _RichToolbarState extends State<RichToolbar> {
+  static const double _height = 52;
+
   QuillController get c => widget.controller;
 
   @override
@@ -55,136 +60,189 @@ class _RichToolbarState extends State<RichToolbar> {
 
   @override
   Widget build(BuildContext context) {
-    final items = <ToolbarItem>[
-      ToolbarItem(icon: Icons.undo, tooltip: '撤销', onTap: () => c.undo()),
-      ToolbarItem(icon: Icons.redo, tooltip: '重做', onTap: () => c.redo()),
-      ToolbarItem(
-          icon: Icons.format_bold,
+    final colors = MiuixTheme.of(context).colors;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    final sysBottomPadding = MediaQuery.paddingOf(context).bottom;
+    final double extraBottom = bottomInset <= 0 ? sysBottomPadding : 0.0;
+
+    // 当前标题层级（'header' 属性缺省即正文），用于菜单勾选态。
+    final headerAttr = c.getSelectionStyle().attributes[Attribute.header.key];
+
+    Widget iconButton(
+      IconData icon, {
+      String? tooltip,
+      bool active = false,
+      VoidCallback? onTap,
+    }) {
+      final Widget button = MiuixIconButton(
+        onPressed: onTap,
+        minWidth: 44,
+        minHeight: 40,
+        child: Icon(
+          icon,
+          size: 22,
+          color: active ? colors.primary : colors.onSurfaceSecondary,
+        ),
+      );
+      if (tooltip == null || tooltip.isEmpty) return button;
+      return _withTooltip(colors, tooltip, button);
+    }
+
+    final buttons = <Widget>[
+      iconButton(Icons.undo, tooltip: '撤销', onTap: () => c.undo()),
+      iconButton(Icons.redo, tooltip: '重做', onTap: () => c.redo()),
+      iconButton(Icons.format_bold,
           tooltip: '加粗',
           active: _has(Attribute.bold.key),
           onTap: () => _toggleInline(Attribute.bold)),
-      ToolbarItem(
-          icon: Icons.format_italic,
+      iconButton(Icons.format_italic,
           tooltip: '斜体',
           active: _has(Attribute.italic.key),
           onTap: () => _toggleInline(Attribute.italic)),
-      ToolbarItem(
-          icon: Icons.format_underlined,
+      iconButton(Icons.format_underline,
           tooltip: '下划线',
           active: _has(Attribute.underline.key),
           onTap: () => _toggleInline(Attribute.underline)),
-      ToolbarItem(
-          icon: Icons.format_strikethrough,
+      iconButton(Icons.format_strikethrough,
           tooltip: '删除线',
           active: _has(Attribute.strikeThrough.key),
           onTap: () => _toggleInline(Attribute.strikeThrough)),
-      ToolbarItem(icon: Icons.text_fields, tooltip: '标题', onTap: _pickHeader),
-      ToolbarItem(
-          icon: Icons.format_list_bulleted,
+      // 标题层级：锚定下拉菜单。收起菜单是无操作，只有选中项才
+      // formatSelection——顺带修掉旧抽屉实现「下滑关闭被当作选正文、
+      // 意外清除标题层级」的 bug。
+      _withTooltip(
+        colors,
+        '标题',
+        MiuixOverlayIconDropdownMenu(
+          minWidth: 44,
+          minHeight: 40,
+          entry: MiuixDropdownEntry(items: [
+            MiuixDropdownItem(
+              text: '正文',
+              selected: headerAttr == null,
+              onClick: () => c.formatSelection(Attribute.header),
+            ),
+            MiuixDropdownItem(
+              text: 'H1',
+              selected: headerAttr?.value == 1,
+              onClick: () => c.formatSelection(Attribute.h1),
+            ),
+            MiuixDropdownItem(
+              text: 'H2',
+              selected: headerAttr?.value == 2,
+              onClick: () => c.formatSelection(Attribute.h2),
+            ),
+            MiuixDropdownItem(
+              text: 'H3',
+              selected: headerAttr?.value == 3,
+              onClick: () => c.formatSelection(Attribute.h3),
+            ),
+            MiuixDropdownItem(
+              text: 'H4',
+              selected: headerAttr?.value == 4,
+              onClick: () => c.formatSelection(Attribute.h4),
+            ),
+          ]),
+          child: Icon(
+            Icons.title,
+            size: 22,
+            color: colors.onSurfaceSecondary,
+          ),
+        ),
+      ),
+      iconButton(Icons.format_list_bulleted,
           tooltip: '无序列表',
           active: _has(Attribute.ul.key),
           onTap: () => _toggleBlock(Attribute.ul)),
-      ToolbarItem(
-          icon: Icons.format_list_numbered,
+      iconButton(Icons.format_list_numbered,
           tooltip: '有序列表',
           active: _has(Attribute.ol.key),
           onTap: () => _toggleBlock(Attribute.ol)),
-      ToolbarItem(
-          icon: Icons.format_quote,
+      iconButton(Icons.format_quote,
           tooltip: '引用',
           active: _has(Attribute.blockQuote.key),
           onTap: () => _toggleBlock(Attribute.blockQuote)),
-      ToolbarItem(
-          icon: Icons.code,
+      iconButton(Icons.code,
           tooltip: '行内代码',
           active: _has(Attribute.inlineCode.key),
           onTap: () => _toggleInline(Attribute.inlineCode)),
-      ToolbarItem(
-          icon: Icons.data_object,
+      iconButton(Icons.data_object,
           tooltip: '代码块',
           active: _has(Attribute.codeBlock.key),
           onTap: () => _toggleBlock(Attribute.codeBlock)),
-      ToolbarItem(icon: Icons.link, tooltip: '链接', onTap: _insertLink),
-      ToolbarItem(
-          icon: Icons.palette_outlined,
-          tooltip: '文字颜色/高亮',
-          onTap: () => widget.onPickColor?.call()),
-      ToolbarItem(
-          icon: Icons.font_download_outlined,
-          tooltip: '字体',
-          onTap: () => widget.onPickFont?.call()),
-      ToolbarItem(
-          icon: Icons.format_align_left,
-          tooltip: '左对齐',
-          onTap: () => c.formatSelection(Attribute.leftAlignment)),
-      ToolbarItem(
-          icon: Icons.format_align_center,
+      iconButton(Icons.link, tooltip: '链接', onTap: _insertLink),
+      iconButton(Icons.format_color_text,
+          tooltip: '文字颜色/高亮', onTap: () => widget.onPickColor?.call()),
+      iconButton(Icons.font_download,
+          tooltip: '字体', onTap: () => widget.onPickFont?.call()),
+      iconButton(Icons.format_align_left,
+          tooltip: '左对齐', onTap: () => c.formatSelection(Attribute.leftAlignment)),
+      iconButton(Icons.format_align_center,
           tooltip: '居中',
           onTap: () => c.formatSelection(Attribute.centerAlignment)),
-      ToolbarItem(
-          icon: Icons.format_align_right,
+      iconButton(Icons.format_align_right,
           tooltip: '右对齐',
           onTap: () => c.formatSelection(Attribute.rightAlignment)),
     ];
-    return FloatingToolbar(items: items);
-  }
 
-  Future<void> _pickHeader() async {
-    final selected = await showModalBottomSheet<Attribute?>(
-      context: context,
-      // 横屏（高度受限）下允许 sheet 占满全屏。
-      isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final entry in const [
-                ('正文', null),
-                ('H1', Attribute.h1),
-                ('H2', Attribute.h2),
-                ('H3', Attribute.h3),
-                ('H4', Attribute.h4),
-              ])
-                ListTile(
-                  title: Text(entry.$1),
-                  onTap: () => Navigator.pop(ctx, entry.$2),
-                ),
-            ],
+    return Padding(
+      padding: EdgeInsets.only(bottom: extraBottom),
+      child: MiuixCard(
+        cornerRadius: AppTokens.radiusBar,
+        insideMargin: EdgeInsets.zero,
+        feedbackType: MiuixPressFeedbackType.none,
+        child: SizedBox(
+          height: _height,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            shrinkWrap: true,
+            itemCount: buttons.length,
+            separatorBuilder: (_, __) => MiuixVerticalDivider(
+              thickness: 0.75,
+            ),
+            itemBuilder: (_, i) => buttons[i],
           ),
         ),
       ),
     );
-    if (selected == null) {
-      // HeaderAttribute() 的空值即清除标题层级，回到正文。
-      c.formatSelection(Attribute.header);
-    } else {
-      c.formatSelection(selected);
-    }
+  }
+
+  /// 与 FloatingToolbar 一致的气泡提示。
+  Widget _withTooltip(MiuixColors colors, String tooltip, Widget child) {
+    return MiuixTooltipBox(
+      tooltip: (ctx, _) => MiuixSurface(
+        color: colors.surface,
+        contentColor: colors.onSurface,
+        cornerRadius: AppTokens.radiusMedium,
+        shadowElevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: MiuixText(tooltip,
+              style: MiuixTheme.of(ctx).textStyles.footnote1),
+        ),
+      ),
+      child: child,
+    );
   }
 
   Future<void> _insertLink() async {
     final ctrl = TextEditingController();
-    final url = await showDialog<String>(
+    final url = await AppDialog.show<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('插入链接'),
-        shape:
-            const RoundedRectangleBorder(borderRadius: Md3eTokens.dialogBorder),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(hintText: 'https://'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: const Text('插入')),
-        ],
+      title: '插入链接',
+      content: AppInput(
+        controller: ctrl,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        hintText: 'https://',
       ),
+      actions: [
+        MiuixTextButton('取消', onPressed: () => AppDialog.close(context)),
+        MiuixButton(
+          onPressed: () => AppDialog.close<String>(context, ctrl.text.trim()),
+          child: const MiuixText('插入'),
+        ),
+      ],
     );
     if (url != null && url.isNotEmpty) {
       c.formatSelection(LinkAttribute(url));

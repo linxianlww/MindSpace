@@ -136,6 +136,15 @@ class PrivateSpaceService extends ChangeNotifier {
     return true;
   }
 
+  /// 系统凭证（设备指纹/面容/系统 PIN）验证通过后的解锁。
+  ///
+  /// 设备级验证已由 SystemPinChannel 完成（系统凭证视为本地校验通过），
+  /// 这里与 [unlock] 的成功后置动作保持一致：置位会话并同步 FLAG_SECURE。
+  Future<void> unlockWithSystemCredential() async {
+    await _setSessionUnlocked(true);
+    await _syncScreenshotProtection();
+  }
+
   /// 生物识别解锁。
   ///
   /// 必须先有 PIN 且生物识别已绑定；成功后同样解锁会话并同步 FLAG_SECURE。

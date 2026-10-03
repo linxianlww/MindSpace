@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mindspace/core/widgets/state_views.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 void main() {
   Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -36,7 +36,7 @@ void main() {
 
   testWidgets('LoadingState 渲染加载指示与提示', (tester) async {
     await tester.pumpWidget(host(const LoadingState(hint: '加载中')));
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(MiuixCircularProgressIndicator), findsOneWidget);
     expect(find.text('加载中'), findsOneWidget);
   });
 }

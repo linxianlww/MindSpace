@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
+// ColorScheme 为离线渲染器配色结构（dart:ui 层无等价物），按白名单规则 show 导入。
+import 'package:flutter/material.dart' show ColorScheme;
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../data/models/memo.dart';
 

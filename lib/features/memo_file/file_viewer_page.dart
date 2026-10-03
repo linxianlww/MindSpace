@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import '../../../core/widgets/state_views.dart';
 import '../desktop_shortcut/add_to_desktop.dart';
 import '../home/home_provider.dart';
 import 'file_provider.dart';
@@ -18,13 +17,14 @@ class FileViewerPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memoAsync = ref.watch(memoDetailProvider(memoId));
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(memoAsync.maybeWhen(
-            data: (m) => m?.title ?? '文件', orElse: () => '文件')),
+    return AppScaffold(
+      topBar: AppHeader(
+        title: memoAsync.maybeWhen(
+            data: (m) => m?.title ?? '文件', orElse: () => '文件'),
+        alwaysSmall: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_to_home_screen),
+          AppTapIcon(
+            icon: const HiuiIcon(HiuiIcons.export),
             tooltip: '添加到桌面',
             onPressed: () {
               final m = memoAsync.value;
@@ -81,7 +81,7 @@ class _GenericView extends StatelessWidget {
             sizeBytes: content.sizeBytes,
             ext: content.ext,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           if (content.path.isNotEmpty) OpenWithButton(path: content.path),
         ],
       ),

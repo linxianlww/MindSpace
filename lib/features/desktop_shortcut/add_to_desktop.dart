@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../data/models/memo.dart';
 import 'desktop_shortcut_service.dart';
@@ -43,13 +43,10 @@ Future<void> addMemoToDesktop(
   }
 
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(ok
-          ? '已请求添加桌面快捷方式，请在弹出的确认框中确认添加${memo.title.isNotEmpty ? "：${memo.title}" : ""}'
-          : '添加失败，当前桌面可能不支持固定快捷方式\n建议尝试：长按桌面空白处 → 选择「快捷方式」或「小组件」'),
-      behavior: SnackBarBehavior.floating,
-      duration: const Duration(seconds: 3),
-    ),
+  AppSnackbar.show(
+    context,
+    message: ok
+        ? '已请求添加桌面快捷方式，请在弹出的确认框中确认添加${memo.title.isNotEmpty ? "：${memo.title}" : ""}'
+        : '添加失败，当前桌面可能不支持固定快捷方式\n建议尝试：长按桌面空白处 → 选择「快捷方式」或「小组件」',
   );
 }

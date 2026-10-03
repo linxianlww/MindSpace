@@ -1,11 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../core/widgets/state_views.dart';
 import '../share/share_service.dart';
 import '../home/home_provider.dart';
 import 'media_provider.dart';
-import 'media_viewer_page.dart';
 import 'widgets/media_grid.dart';
 
 /// 媒体集编辑页：增删媒体、拖拽排序，点击进入查看器（裁剪/旋转/备注）。
@@ -20,24 +19,34 @@ class MediaEditorPage extends ConsumerStatefulWidget {
 class _MediaEditorPageState extends ConsumerState<MediaEditorPage> {
   bool _editMode = true;
 
+  /// AppScaffold 子树内的宿主 context（弹层 API 需要脚手架下方的 context）。
+  BuildContext? _hostCtx;
+
+  /// 页面级弹层调用的宿主 context；未就绪时返回 null。
+  BuildContext? get _pageCtx {
+    final ctx = _hostCtx;
+    return (ctx != null && ctx.mounted) ? ctx : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
     final itemsAsync = ref.watch(mediaItemsProvider(widget.memoId));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(memoAsync.maybeWhen(
-            data: (m) => m?.title ?? '媒体集', orElse: () => '媒体集')),
+    return AppScaffold(
+      topBar: AppHeader(
+        title: memoAsync.maybeWhen(
+            data: (m) => m?.title ?? '媒体集', orElse: () => '媒体集'),
+        alwaysSmall: true,
         actions: [
-          IconButton(
+          AppTapIcon(
             tooltip: _editMode ? '完成' : '管理',
-            icon: Icon(_editMode ? Icons.check_circle_outline : Icons.tune),
+            icon: HiuiIcon(_editMode ? HiuiIcons.checkCircle : HiuiIcons.tune),
             onPressed: () => setState(() => _editMode = !_editMode),
           ),
-          IconButton(
+          AppTapIcon(
             tooltip: '打包分享',
-            icon: const Icon(Icons.ios_share),
+            icon: const HiuiIcon(HiuiIcons.share),
             onPressed: () async {
               final paths = await ref
                   .read(mediaControllerProvider)
@@ -49,47 +58,59 @@ class _MediaEditorPageState extends ConsumerState<MediaEditorPage> {
           ),
         ],
       ),
-      body: itemsAsync.when(
-        loading: () => const LoadingState(),
-        error: (e, _) => ErrorState(
-            message: '$e',
-            onRetry: () => ref.invalidate(mediaItemsProvider(widget.memoId))),
-        data: (items) {
-          if (items.isEmpty) {
-            return EmptyState(
-              icon: Icons.add_photo_alternate_outlined,
-              title: '还没有媒体',
-              subtitle: '点击右下角添加图片或视频',
-              actionLabel: '添加媒体',
-              onAction: _add,
+      body: Builder(builder: (hostCtx) {
+        _hostCtx = hostCtx;
+        return itemsAsync.when(
+          loading: () => const LoadingState(),
+          error: (e, _) => ErrorState(
+              message: '$e',
+              onRetry: () => ref.invalidate(mediaItemsProvider(widget.memoId))),
+          data: (items) {
+            if (items.isEmpty) {
+              return EmptyState(
+                icon: HiuiIcons.image,
+                title: '还没有媒体',
+                subtitle: '点击右下角添加图片或视频',
+                actionLabel: '添加媒体',
+                onAction: _add,
+              );
+            }
+            return MediaGrid(
+              items: items,
+              editMode: _editMode,
+              onTap: _openViewer,
+              onReorder: (from, to) => ref
+                  .read(mediaControllerProvider)
+                  .reorder(widget.memoId, items, from, to),
+              onRemove: (item) async {
+                await ref.read(mediaControllerProvider).remove(item);
+              },
             );
-          }
-          return MediaGrid(
-            items: items,
-            editMode: _editMode,
-            onTap: (i) => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => MediaViewerPage(
-                  memoId: widget.memoId,
-                  initialIndex: i,
-                ),
-              ),
-            ),
-            onReorder: (from, to) => ref
-                .read(mediaControllerProvider)
-                .reorder(widget.memoId, items, from, to),
-            onRemove: (item) async {
-              await ref.read(mediaControllerProvider).remove(item);
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
+          },
+        );
+      }),
+      floatingActionButton: MiuixFloatingActionButton(
         onPressed: _add,
-        icon: const Icon(Icons.add_photo_alternate_outlined),
-        label: const Text('添加媒体'),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            HiuiIcon(HiuiIcons.image,
+                color: MiuixTheme.of(context).colors.onPrimary),
+            const SizedBox(width: 8),
+            // FAB 内容色默认继承 onSurface，这里显式取 onPrimary 与背景/图标一致。
+            MiuixText('添加媒体',
+                style:
+                    TextStyle(color: MiuixTheme.of(context).colors.onPrimary)),
+          ],
+        ),
       ),
     );
+  }
+
+  /// 进入查看器。查看器携带被点击的初始下标，经路由 `extra` 参数传递
+  /// （go_router push 式导航，与其余页面保持一致）。
+  void _openViewer(int index) {
+    context.push('/memo/media/${widget.memoId}', extra: index);
   }
 
   Future<void> _add() async {
@@ -98,9 +119,9 @@ class _MediaEditorPageState extends ConsumerState<MediaEditorPage> {
     final n = await ref
         .read(mediaControllerProvider)
         .addFiles(widget.memoId, folderId);
-    if (mounted && n > 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('已添加 $n 个媒体')));
+    final ctx = _pageCtx;
+    if (ctx != null && ctx.mounted && n > 0) {
+      AppSnackbar.show(ctx, message: '已添加 $n 个媒体');
     }
   }
 }

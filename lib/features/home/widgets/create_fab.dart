@@ -1,8 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
-
-import '../../../core/theme/md3e_tokens.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 /// 遮罩透明度动画：
 /// - 展开时：前 40% 的时间快速达到目标透明度
@@ -45,10 +43,15 @@ enum CreateTarget { text, media, audio, file, folder, totp, todo, anniversary }
 /// 展开态：[OverlayEntry] 承载（含半透明暗色遮罩 + Wrap 入口列表），
 /// 主按钮由 Scaffold 自身管理并始终显示在屏幕右下角。
 class CreateFab extends StatefulWidget {
-  const CreateFab({super.key, required this.onSelect, this.onOpenChanged});
+  const CreateFab(
+      {super.key,
+      required this.onSelect,
+      this.onOpenChanged,
+      this.onLongPress});
 
   final void Function(CreateTarget target) onSelect;
   final void Function(bool open)? onOpenChanged;
+  final VoidCallback? onLongPress;
 
   @override
   State<CreateFab> createState() => CreateFabState();
@@ -68,15 +71,56 @@ class CreateFabState extends State<CreateFab>
   bool _pendingClose = false;
 
   // 条目定义: (target, icon, label, accent)
-  static const _items = <(CreateTarget, IconData, String, Color)>[
-    (CreateTarget.folder, Icons.create_new_folder_outlined, '新建文件夹', Color(0xFF8B5E3C)),
-    (CreateTarget.todo, Icons.fact_check_rounded, '新建待办', Color(0xFF3B6B2E)),
-    (CreateTarget.text, Icons.notes_rounded, '新建文本', Color(0xFF5B5BD6)),
-    (CreateTarget.media, Icons.photo_library_outlined, '新建媒体集', Color(0xFF0F7B6C)),
-    (CreateTarget.audio, Icons.mic_none_rounded, '新建音频', Color(0xFFB0005B)),
-    (CreateTarget.file, Icons.upload_file_outlined, '导入文件', Color(0xFF3B6B2E)),
-    (CreateTarget.totp, Icons.pin_outlined, 'TOTP 验证码', Color(0xFF6A1B9A)),
-    (CreateTarget.anniversary, Icons.event_outlined, '纪念日', Color(0xFFE64A19)),
+  // 各铭记类型的强调色（固定色板，与全局主题无关）。
+  static const _items = <(CreateTarget, String, String, Color)>[
+    (
+      CreateTarget.folder,
+      HiuiIcons.folderAdd,
+      '新建文件夹',
+      Color(0xFF8B4A00)
+    ),
+    (
+      CreateTarget.todo,
+      HiuiIcons.checkSquare,
+      '新建待办',
+      Color(0xFF3B6B2E)
+    ),
+    (
+      CreateTarget.text,
+      HiuiIcons.document,
+      '新建文本',
+      Color(0xFF5B5BD6)
+    ),
+    (
+      CreateTarget.media,
+      HiuiIcons.image,
+      '新建媒体集',
+      Color(0xFF00696E)
+    ),
+    (
+      CreateTarget.audio,
+      HiuiIcons.mic,
+      '新建音频',
+      Color(0xFFB0005B)
+    ),
+    (
+      CreateTarget.file,
+      HiuiIcons.upload,
+      '导入文件',
+      Color(0xFF3B6B2E)
+    ),
+    (
+      CreateTarget.totp,
+      HiuiIcons.pin,
+      'TOTP 验证码',
+      Color(0xFF5B5BD6)
+    ),
+    (
+      CreateTarget.anniversary,
+      HiuiIcons.calendar,
+      '纪念日',
+      Color(0xFFE53935)
+    ),
   ];
 
   // 单个入口动画时长占总时长的比例。
@@ -144,8 +188,9 @@ class CreateFabState extends State<CreateFab>
     _scrimEntry = OverlayEntry(builder: (ctx) {
       // 必须在 overlay 上下文内获取 viewPadding，确保拿到系统导航栏高度
       final bottomPadding = MediaQuery.viewPaddingOf(ctx).bottom;
-      final isDark = Theme.of(ctx).brightness == Brightness.dark;
-      final barrierColor = isDark ? Colors.white24 : Colors.black54;
+      // 遮罩色取主题 windowDimming（与 Dialog/Dropdown 等弹层遮罩一致），
+      // 深浅色自动适配，不再硬编码。
+      final barrierColor = MiuixTheme.of(ctx).colors.windowDimming;
       return _ScrimStack(
         scrimOpacity: _scrimOpacity,
         fabRotation: _fabRotation,
@@ -155,10 +200,7 @@ class CreateFabState extends State<CreateFab>
         child: Positioned(
           right: 16,
           bottom: 80 + bottomPadding,
-          child: Material(
-            type: MaterialType.transparency,
-            child: _buildPillList(),
-          ),
+          child: _buildPillList(),
         ),
       );
     });
@@ -219,24 +261,30 @@ class CreateFabState extends State<CreateFab>
     return _buildFab();
   }
 
-  /// 主浮动按钮（收起 + 展开态均显示）。
-  Widget _buildFab() {
-    return FloatingActionButton.extended(
-      onPressed: _toggle,
-      icon: AnimatedBuilder(
-        animation: _fabRotation,
-        builder: (context, child) => Transform.rotate(
-          angle: _fabRotation.value,
-          child: child,
-        ),
-        child: const Icon(Icons.add),
+/// 主浮动按钮（收起 + 展开态均显示）—— 仅图标，无文字。
+///
+/// 底座使用 MiuixFloatingActionButton：primary 背景 + Stadium 胶囊，
+/// 内容色需显式取 onPrimary（该组件不向内容传递 onPrimary）。
+Widget _buildFab() {
+  final colors = MiuixTheme.of(context).colors;
+  final fab = MiuixFloatingActionButton(
+    onPressed: _toggle,
+    containerColor: colors.primary,
+    child: AnimatedBuilder(
+      animation: _fabRotation,
+      builder: (context, child) => Transform.rotate(
+        angle: _fabRotation.value,
+        child: child,
       ),
-      label: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (context, _) => Text(_ctrl.value > 0.5 ? '收起' : '新建'),
-      ),
-    );
-  }
+      child: HiuiIcon(HiuiIcons.add, color: colors.onPrimary),
+    ),
+  );
+  if (widget.onLongPress == null) return fab;
+  return GestureDetector(
+    onLongPress: widget.onLongPress,
+    child: fab,
+  );
+}
 
   /// 入口列表：逐个出现 / 逐个消失。
   Widget _buildPillList() {
@@ -278,7 +326,7 @@ class _AnimatedPill extends StatelessWidget {
   });
 
   final Animation<double> animation;
-  final IconData icon;
+  final String icon;
   final String label;
   final Color accent;
   final VoidCallback onTap;
@@ -311,7 +359,9 @@ class _AnimatedPill extends StatelessWidget {
 }
 
 /// 静态入口按钮内容（无动画）。
-class _PillContent extends StatefulWidget {
+///
+/// 图标 + 文字横向排列：图标在左，文字在右，整体胶囊造型。
+class _PillContent extends StatelessWidget {
   const _PillContent({
     required this.icon,
     required this.label,
@@ -319,51 +369,35 @@ class _PillContent extends StatefulWidget {
     required this.onTap,
   });
 
-  final IconData icon;
+  final String icon;
   final String label;
   final Color accent;
   final VoidCallback onTap;
 
   @override
-  State<_PillContent> createState() => _PillContentState();
-}
-
-class _PillContentState extends State<_PillContent> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AnimatedScale(
-      scale: _pressed ? 0.94 : 1,
-      duration: const Duration(milliseconds: 120),
-      child: Material(
-        color: scheme.surfaceContainerHigh,
-        elevation: 2,
-        borderRadius: BorderRadius.circular(Md3eTokens.radiusFab),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(Md3eTokens.radiusFab),
-          onTap: widget.onTap,
-          onTapDown: (_) => setState(() => _pressed = true),
-          onTapUp: (_) => setState(() => _pressed = false),
-          onTapCancel: () => setState(() => _pressed = false),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(widget.icon, color: widget.accent, size: 18),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                ),
-              ],
-            ),
+    final colors = MiuixTheme.of(context).colors;
+    final ts = MiuixTheme.of(context).textStyles;
+    return Semantics(
+      button: true,
+      label: label,
+      child: MiuixSurface(
+        onPressed: onTap,
+        cornerRadius: AppTokens.radiusFab,
+        color: colors.surfaceContainerHigh,
+        shadowElevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HiuiIcon(icon, color: accent, size: 22),
+              const SizedBox(width: 10),
+              MiuixText(
+                label,
+                style: ts.button.copyWith(color: colors.onSurface),
+              ),
+            ],
           ),
         ),
       ),

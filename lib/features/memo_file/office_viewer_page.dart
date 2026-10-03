@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+// DataColumn/DataRow/DataCell 为 functional 表格组件（MIUIX 无等价物），
+// 按白名单规则 show 导入。
+import 'package:flutter/material.dart' show DataColumn, DataRow, DataCell;
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../../core/utils/doc_parser.dart';
 import 'file_provider.dart';
@@ -28,13 +31,17 @@ class _DocxView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (text.trim().isEmpty) {
-      return const Center(child: Text('文档没有可显示的文本'));
+      return const Center(child: MiuixText('文档没有可显示的文本'));
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: SelectableText(
+      padding: const EdgeInsets.all(16),
+      child: AppSelectableText(
         text,
-        style: const TextStyle(height: 1.6, fontSize: 15),
+        // 阅读排版：基于 body1 语义，仅调整行高与字号
+        style: MiuixTheme.of(context)
+            .textStyles
+            .body1
+            .copyWith(height: 1.6, fontSize: 15),
       ),
     );
   }
@@ -48,42 +55,35 @@ class _XlsxView extends StatefulWidget {
   State<_XlsxView> createState() => _XlsxViewState();
 }
 
-class _XlsxViewState extends State<_XlsxView>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tab =
-      TabController(length: widget.sheets.length, vsync: this);
-
-  @override
-  void dispose() {
-    _tab.dispose();
-    super.dispose();
-  }
+class _XlsxViewState extends State<_XlsxView> {
+  int _tabIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    if (widget.sheets.isEmpty) {
-      return const Center(child: Text('工作簿为空'));
+    final sheets = widget.sheets;
+    if (sheets.isEmpty) {
+      return const Center(child: MiuixText('工作簿为空'));
     }
     return Column(
       children: [
-        TabBar(
-          isScrollable: true,
-          tabs: [for (final s in widget.sheets) Tab(text: s.name)],
-          controller: _tab,
+        AppTabStrip(
+          tabs: [for (final s in sheets) s.name],
+          selectedIndex: _tabIndex,
+          onTabSelected: (i) => setState(() => _tabIndex = i),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tab,
+          child: IndexedStack(
+            index: _tabIndex,
             children: [
-              for (final s in widget.sheets)
+              for (final s in sheets)
                 InteractiveViewer(
                   constrained: false,
-                  child: DataTable(
+                  child: AppDataTable(
                     columns: [
                       for (var c = 0;
                           c < (s.rows.isEmpty ? 0 : s.rows.first.length);
                           c++)
-                        DataColumn(label: Text('${c + 1}')),
+                        DataColumn(label: MiuixText('${c + 1}')),
                     ],
                     rows: [
                       for (final row in s.rows)
@@ -92,7 +92,7 @@ class _XlsxViewState extends State<_XlsxView>
                             for (final cell in row)
                               DataCell(SizedBox(
                                 width: 120,
-                                child: Text(cell,
+                                child: MiuixText(cell,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis),
                               )),

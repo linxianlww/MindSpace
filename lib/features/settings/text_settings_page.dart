@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/di/providers.dart';
@@ -17,151 +17,155 @@ class TextSettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final scheme = Theme.of(context).colorScheme;
+    final miuixTheme = MiuixTheme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('文本排版')),
-      body: ListView(
+    return AppScaffold(
+      topBar: AppHeader(title: '文本排版'),
+      content: (context, padding) => ListView(
+        padding: padding,
         children: [
-          Card(
-            margin: const EdgeInsets.all(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MiuixSurface(
+              cornerRadius: AppTokens.radiusMedium,
+              color: miuixTheme.colors.surfaceContainer,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  ListTile(
-                    leading: const Icon(Icons.format_line_spacing),
-                    title: const Text('行距'),
-                    subtitle: Text(
-                      '${settings.lineHeight.toStringAsFixed(1)} 倍字号',
-                      style: TextStyle(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Slider(
+                  MiuixSliderPreference(
+                    title: '行距',
+                    startAction: HiuiIcon(HiuiIcons.lineSpacing),
                     value: settings.lineHeight.clamp(_minLine, _maxLine),
                     min: _minLine,
                     max: _maxLine,
-                    divisions: 10,
-                    label:
-                        settings.lineHeight.toStringAsFixed(1),
-                    onChanged: (v) => notifier.setLineHeight(v),
+                    steps: 10,
+                    showKeyPoints: true,
+                    summary: '${settings.lineHeight.toStringAsFixed(1)} 倍字号',
+                    onValueChange: notifier.setLineHeight,
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.space_bar),
-                    title: const Text('段距'),
-                    subtitle: Text(
-                      settings.paragraphSpacing.round() == 0
-                          ? '无段距'
-                          : '${settings.paragraphSpacing.round()} px',
-                      style: TextStyle(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Slider(
+                  MiuixSliderPreference(
+                    title: '段距',
+                    startAction: HiuiIcon(HiuiIcons.spaceBar),
                     value: settings.paragraphSpacing.clamp(_minPara, _maxPara),
                     min: _minPara,
                     max: _maxPara,
-                    divisions: 16,
-                    label: settings.paragraphSpacing.round().toString(),
-                    onChanged: (v) => notifier.setParagraphSpacing(v),
+                    steps: 16,
+                    showKeyPoints: true,
+                    summary: settings.paragraphSpacing.round() == 0
+                        ? '无段距'
+                        : '${settings.paragraphSpacing.round()} px',
+                    onValueChange: notifier.setParagraphSpacing,
                   ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.ios_share_outlined),
-                    title: const Text('分享水印'),
-                    subtitle: Text(
+                  AppListRow(
+                    leading: HiuiIcon(HiuiIcons.share),
+                    title: MiuixText('分享水印'),
+                    subtitle: MiuixText(
                       '分享自 ${settings.shareImageWatermarkSuffix}',
                       style: TextStyle(
-                          color: scheme.primary,
+                          color: miuixTheme.colors.primary,
                           fontWeight: FontWeight.w600),
                     ),
-                    trailing: const Icon(Icons.edit, size: 18),
+                    trailing: HiuiIcon(HiuiIcons.edit, size: 18),
+                    showArrow: false,
                     onTap: () => _editShareSuffix(context, ref),
                   ),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44)),
-              onPressed: () =>
-                  notifier.setShareImageWatermarkSuffix(AppConstants.defaultShareImageSuffix),
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('恢复默认水印（NekoBox）'),
+            child: SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: AppButton(
+                variant: AppButtonStyle.outlined,
+                onPressed: () => notifier.setShareImageWatermarkSuffix(
+                    AppConstants.defaultShareImageSuffix),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    HiuiIcon(HiuiIcons.reset),
+                    const SizedBox(width: 8),
+                    MiuixText('恢复默认水印（NekoBox）'),
+                  ],
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
-            child: Text(
-              '行距与段距同步应用到阅读页、编辑器以及“分享为图片”长图排版。\n'
-              '“分享为图片”的长图底部会显示「分享自 ___」水印后缀。',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            child: MiuixText(
+              '行距与段距同步应用到阅读页、编辑器以及"分享为图片"长图排版。\n'
+              '"分享为图片"的长图底部会显示「分享自 ___」水印后缀。',
+              style: miuixTheme.textStyles.footnote1
+                  .copyWith(color: miuixTheme.colors.onSurfaceVariantSummary),
             ),
           ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44)),
-              onPressed: () {
-                notifier.setLineHeight(1.7);
-                notifier.setParagraphSpacing(10);
-                notifier.setShareImageWatermarkSuffix(
-                    AppConstants.defaultShareImageSuffix);
-              },
-              icon: const Icon(Icons.restart_alt),
-              label: const Text('全部恢复默认'),
+            child: SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: AppButton(
+                variant: AppButtonStyle.outlined,
+                onPressed: () {
+                  notifier.setLineHeight(1.7);
+                  notifier.setParagraphSpacing(10);
+                  notifier.setShareImageWatermarkSuffix(
+                      AppConstants.defaultShareImageSuffix);
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    HiuiIcon(HiuiIcons.reset),
+                    const SizedBox(width: 8),
+                    MiuixText('全部恢复默认'),
+                  ],
+                ),
+              ),
             ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
     );
   }
 
   Future<void> _editShareSuffix(BuildContext context, WidgetRef ref) async {
-    final current =
-        ref.read(settingsProvider).shareImageWatermarkSuffix;
+    final current = ref.read(settingsProvider).shareImageWatermarkSuffix;
     final ctrl = TextEditingController(text: current);
     try {
-      final suffix = await showDialog<String>(
+      final suffix = await AppDialog.show<String>(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('分享水印后缀'),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            maxLength: 20,
-            decoration: const InputDecoration(
-              hintText: '将显示在分享长图底部',
-              prefixText: '分享自 ',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, ctrl.text),
-                child: const Text('确定')),
-          ],
+        title: '分享水印后缀',
+        content: AppInput(
+          controller: ctrl,
+          autofocus: true,
         ),
+        actions: [
+          MiuixTextButton(
+            '取消',
+            onPressed: () => AppDialog.close<void>(context),
+          ),
+          MiuixButton(
+            onPressed: () => AppDialog.close<String>(context, ctrl.text),
+            child: const MiuixText('确定'),
+          ),
+        ],
       );
       if (suffix != null && suffix.trim().isNotEmpty) {
-        ref.read(settingsProvider.notifier)
+        ref
+            .read(settingsProvider.notifier)
             .setShareImageWatermarkSuffix(suffix);
       } else if (suffix != null && suffix.trim().isEmpty) {
-        // 空输入默认恢复为项目默认水印。
-        ref.read(settingsProvider.notifier)
+        ref
+            .read(settingsProvider.notifier)
             .setShareImageWatermarkSuffix(AppConstants.defaultShareImageSuffix);
       }
     } finally {

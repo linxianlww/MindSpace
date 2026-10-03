@@ -1,7 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
-import '../../../core/theme/md3e_tokens.dart';
 import '../../../data/models/folder.dart';
 import '../../../data/models/memo.dart';
 import 'folder_card.dart';
@@ -19,7 +18,6 @@ class MemoMasonry extends StatelessWidget {
     required this.onOpenFolder,
     required this.onLongPressMemo,
     required this.onLongPressFolder,
-    this.privateSpaceEntry,
   });
 
   final List<Folder> folders;
@@ -29,19 +27,15 @@ class MemoMasonry extends StatelessWidget {
   final void Function(Memo memo) onLongPressMemo;
   final void Function(Folder folder) onLongPressFolder;
 
-  /// 私密空间入口（仅根目录渲染）。
-  final Widget? privateSpaceEntry;
-
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final columns = Md3eTokens.masonryColumns(width);
+    final columns = AppTokens.masonryColumns(width);
     final total = folders.length + memos.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (privateSpaceEntry != null) privateSpaceEntry!,
         MasonryGridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -54,14 +48,14 @@ class MemoMasonry extends StatelessWidget {
             // 文件夹条目排在最前，铭记紧跟其后。
             if (i < folders.length) {
               final f = folders[i];
-              return FolderCard(
+              return FolderTile(
                 folder: f,
                 onTap: () => onOpenFolder(f),
                 onLongPress: () => onLongPressFolder(f),
               );
             }
             final memo = memos[i - folders.length];
-            return MemoCard(
+            return MemoTile(
               memo: memo,
               onTap: () => onOpenMemo(memo),
               onLongPress: () => onLongPressMemo(memo),

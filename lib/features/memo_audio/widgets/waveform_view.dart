@@ -1,5 +1,5 @@
 import 'package:audio_waveforms/audio_waveforms.dart';
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 /// 录音时的实时波形（audio_waveforms 提供）。
 class LiveWaveform extends StatelessWidget {
@@ -9,7 +9,7 @@ class LiveWaveform extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = MiuixTheme.of(context).colors;
     return SizedBox(
       height: height,
       child: AudioWaveforms(
@@ -46,7 +46,7 @@ class PlaybackWaveform extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = MiuixTheme.of(context).colors;
     return SizedBox(
       height: height,
       child: LayoutBuilder(
@@ -73,7 +73,7 @@ class PlaybackWaveform extends StatelessWidget {
                     ? 0
                     : (positionMs / durationMs).clamp(0.0, 1.0),
                 played: scheme.primary,
-                unplayed: scheme.outlineVariant,
+                unplayed: scheme.outline,
               ),
             ),
           );

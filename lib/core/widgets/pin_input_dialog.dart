@@ -1,18 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_miuix/miuix.dart';
 
+import '../../ui/design_system/hiui_icons.dart';
 import 'system_pin_channel.dart';
 
 /// PIN 对话框类型。
 enum PinDialogMode { create, confirm, verify }
 
-/// 显示 PIN 输入对话框。
-///
-/// 使用 Flutter 的安全密码输入字段（obscureText + 系统数字键盘），
-/// 输入时显示 ● 字符；6 位数字。
-///
-/// verify/confirm 模式会弹出 Android 系统 PIN/图案/密码对话框作为首选；
-/// 系统 PIN 不可用时回退到内部密码输入框。
+/// 显示 PIN 对话框 —— MIUIX 风格。
 Future<void> showPinInputDialog({
   required BuildContext context,
   required PinDialogMode mode,
@@ -32,6 +27,17 @@ Future<void> showPinInputDialog({
       onBiometricTap: onBiometricTap,
     ),
   );
+}
+
+/// 关闭 PIN 对话框（白名单组件自身的管理入口）。
+///
+/// 本对话框由原生 Material showDialog 路由承载（安全组件豁免，见
+/// docs/UI_GUIDELINES.md 第 4 节），页面层关闭它统一走这里，
+/// 不要直接 Navigator.pop。
+class PinInputDialog {
+  const PinInputDialog._();
+
+  static void close(BuildContext context) => Navigator.of(context).pop();
 }
 
 class _PinInputDialog extends StatefulWidget {
@@ -58,8 +64,6 @@ class _PinInputDialogState extends State<_PinInputDialog> {
   bool _confirming = false;
   String _errorText = '';
   bool _processing = false;
-  /// 自定义输入框先隐藏；verify/confirm 模式等待系统 PIN 返回。
-  /// 创建模式直接显示输入框。
   bool _showInputField = false;
 
   final _pinController = TextEditingController();
@@ -90,6 +94,7 @@ class _PinInputDialogState extends State<_PinInputDialog> {
   @override
   void initState() {
     super.initState();
+    _pinController.addListener(_onPinChanged);
     if (widget.mode == PinDialogMode.create) {
       _showInputField = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -102,8 +107,17 @@ class _PinInputDialogState extends State<_PinInputDialog> {
     }
   }
 
+  /// 输入达到 6 位时自动提交。
+  void _onPinChanged() {
+    if (_processing) return;
+    if (_pinController.text.length >= 6) {
+      _onPinCompleted(_pinController.text.substring(0, 6));
+    }
+  }
+
   @override
   void dispose() {
+    _pinController.removeListener(_onPinChanged);
     _pinController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -118,7 +132,6 @@ class _PinInputDialogState extends State<_PinInputDialog> {
     try {
       final available = await SystemPinChannel.isAvailable();
       if (!available) {
-        // 设备没有 PIN：显示内部输入框
         if (mounted) {
           setState(() {
             _showInputField = true;
@@ -132,11 +145,12 @@ class _PinInputDialogState extends State<_PinInputDialog> {
       }
       final ok = await SystemPinChannel.show(
         title: _title,
-        subtitle: widget.mode == PinDialogMode.verify ? '解锁私密空间' : '验证身份',
+        subtitle: widget.mode == PinDialogMode.verify
+            ? '解锁私密空间'
+            : '验证身份',
       );
       if (!mounted) return;
       if (ok) {
-        // 系统 PIN 通过 → 视为本地校验通过（系统 PIN 是设备级验证）
         Navigator.of(context).pop();
       } else {
         setState(() {
@@ -206,102 +220,100 @@ class _PinInputDialogState extends State<_PinInputDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return AlertDialog(
-      title: Text(_title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(_subtitle, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 24),
-          if (!_showInputField) ...[
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Column(
+    final ts = MiuixTheme.of(context).textStyles;
+    final colors = MiuixTheme.of(context).colors;
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: MiuixSurface(
+        child: MiuixCard(
+          cornerRadius: 32,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(_title, style: ts.title4),
+                const SizedBox(height: 8),
+                Text(_subtitle, style: ts.body1),
+                const SizedBox(height: 24),
+                if (!_showInputField) ...[
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Column(
+                        children: [
+                          MiuixCircularProgressIndicator(strokeWidth: 2),
+                          SizedBox(height: 12),
+                          Text('正在调起系统密码键盘...'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  MiuixTextField(
+                    controller: _pinController,
+                    focusNode: _focusNode,
+                    enabled: !_processing,
+                    obscureText: true,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    useLabelAsPlaceholder: true,
+                    label: '------',
+                    textStyle: TextStyle(
+                      fontSize: 24,
+                      letterSpacing: 12,
+                      color: colors.onSurface,
+                    ),
+                  ),
+                  if (_errorText.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        _errorText,
+                        style: ts.footnote1.copyWith(color: colors.primary),
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    CircularProgressIndicator(strokeWidth: 2),
-                    SizedBox(height: 12),
-                    Text('正在调起系统密码键盘...'),
+                    if (_showInputField &&
+                        widget.mode == PinDialogMode.verify &&
+                        widget.biometricEnabled)
+                      MiuixIconButton(
+                        onPressed:
+                            _processing ? null : widget.onBiometricTap,
+                        child: const HiuiIcon(HiuiIcons.fingerprint),
+                      ),
+                    if (widget.mode != PinDialogMode.create && !_showInputField)
+                      MiuixButton(
+                        onPressed: _processing
+                            ? null
+                            : () {
+                                setState(
+                                    () => _showInputField = true);
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) {
+                                  if (mounted) _focusNode.requestFocus();
+                                });
+                              },
+                        child: const Text('使用应用内输入'),
+                      ),
+                    MiuixButton(
+                      onPressed: _processing
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      child: const Text('取消'),
+                    ),
                   ],
                 ),
-              ),
-            ),
-          ] else ...[
-            // 系统密码输入框
-            TextField(
-              controller: _pinController,
-              focusNode: _focusNode,
-              enabled: !_processing,
-              obscureText: true,
-              obscuringCharacter: '●',
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 20,
-                letterSpacing: 12,
-              ),
-              maxLength: 6,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(6),
               ],
-              decoration: InputDecoration(
-                counterText: '',
-                hintText: '------',
-                hintStyle: TextStyle(
-                  color: scheme.outlineVariant,
-                  letterSpacing: 12,
-                ),
-                filled: true,
-                fillColor: scheme.surfaceContainerLowest,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: scheme.outlineVariant),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: scheme.outlineVariant),
-                ),
-                errorText: _errorText.isNotEmpty ? _errorText : null,
-              ),
-              onChanged: (v) {
-                if (v.length == 6) _onPinCompleted(v);
-              },
-              onSubmitted: (v) {
-                if (v.length == 6) _onPinCompleted(v);
-              },
             ),
-          ],
-        ],
-      ),
-      actions: [
-        if (_showInputField &&
-            widget.mode == PinDialogMode.verify &&
-            widget.biometricEnabled)
-          IconButton(
-            icon: const Icon(Icons.fingerprint),
-            tooltip: '生物识别',
-            onPressed: _processing ? null : widget.onBiometricTap,
           ),
-        if (widget.mode != PinDialogMode.create && !_showInputField)
-          TextButton(
-            onPressed: _processing
-                ? null
-                : () {
-                    setState(() => _showInputField = true);
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) _focusNode.requestFocus();
-                    });
-                  },
-            child: const Text('使用应用内输入'),
-          ),
-        TextButton(
-          onPressed: _processing ? null : () => Navigator.of(context).pop(),
-          child: const Text('取消'),
         ),
-      ],
+      ),
     );
   }
 }

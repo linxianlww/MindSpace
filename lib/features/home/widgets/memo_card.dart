@@ -1,27 +1,25 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
-import '../../../core/theme/md3e_tokens.dart';
 import '../../../core/theme/memo_scoped_theme.dart';
 import '../../../core/utils/ms_date_utils.dart';
 import '../../../core/utils/totp.dart';
-import '../../../core/widgets/md3e_card.dart';
 import '../../../data/models/memo.dart';
 import '../../../data/models/memo_type.dart';
 import '../../memo_anniversary/anniversary_provider.dart';
 import '../../memo_totp/totp_provider.dart';
 
-/// 主页瀑布流中的铭记卡片，按 [MemoType] 呈现不同内容。
+/// 主页瀑布流中的铭记卡片（现 MemoTile），按 [MemoType] 呈现不同内容。
 ///
 /// - 标题允许 2 行（超出两行省略）。
 /// - 若铭记设置了颜色，卡片主题色自动跟随该颜色；否则沿用全局主题。
 /// - 颜色 / 备注标签操作已移至长按弹出 [MemoActions.show] 中。
 /// - TOTP 卡片分为两区：顶部 TOTP 区点击复制、底部信息区点击进入查看页。
-class MemoCard extends ConsumerWidget {
-  const MemoCard({
+class MemoTile extends ConsumerWidget {
+  const MemoTile({
     super.key,
     required this.memo,
     required this.onTap,
@@ -32,14 +30,14 @@ class MemoCard extends ConsumerWidget {
   final VoidCallback onTap;
   final VoidCallback onLongPress;
 
-  IconData get _leadingIcon => switch (memo.type) {
-        MemoType.text => Icons.notes_rounded,
-        MemoType.media => Icons.photo_library_rounded,
-        MemoType.audio => Icons.graphic_eq_rounded,
-        MemoType.file => Icons.description_outlined,
-        MemoType.totp => Icons.pin_outlined,
-        MemoType.todo => Icons.fact_check_rounded,
-        MemoType.anniversary => Icons.event_outlined,
+  String get _leadingIcon => switch (memo.type) {
+        MemoType.text => HiuiIcons.document,
+        MemoType.media => HiuiIcons.image,
+        MemoType.audio => HiuiIcons.waveform,
+        MemoType.file => HiuiIcons.document,
+        MemoType.totp => HiuiIcons.pin,
+        MemoType.todo => HiuiIcons.checkSquare,
+        MemoType.anniversary => HiuiIcons.calendar,
       };
 
   String? get _subtitle {
@@ -84,10 +82,8 @@ class MemoCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final brightness = Theme.of(context).brightness;
-    // 没有全局动态 / 自定义种子时使用 MD3E 双种子取色，
-    // 此时铭记色覆盖也应遵循 MD3E 双种子风格。
-    final useMd3e = true;
+    final brightness = MiuixTheme.of(context).brightness;
+    const useMd3e = true;
 
     final color = memo.color != null ? Color(memo.color!) : null;
 
@@ -100,64 +96,64 @@ class MemoCard extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 标题占两行，右侧不再提供三点菜单。
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(_leadingIcon, size: 16,
-                      color: color ?? Theme.of(context).colorScheme.primary),
+                  HiuiIcon(_leadingIcon,
+                      size: 16,
+                      color: color ?? MiuixTheme.of(context).colors.primary),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(
+                    child: MiuixText(
                       memo.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: MiuixTheme.of(context)
+                          .textStyles
+                          .body1
+                          .copyWith(fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
               ),
               if (_subtitle != null) ...[
                 const SizedBox(height: 4),
-                Text(
+                MiuixText(
                   _subtitle!,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: MiuixTheme.of(context).textStyles.body2.copyWith(
+                      color: MiuixTheme.of(context)
+                          .colors
+                          .onSurfaceVariantSummary),
                 ),
               ],
               if (memo.remark != null && memo.remark!.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .secondaryContainer
-                          .withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      memo.remark!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelSmall
-                          ?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSecondaryContainer),
+                  // 备注标签：静态展示，用 MiuixSurface 轻量承载（替代手写 Container）
+                  child: MiuixSurface(
+                    cornerRadius: AppTokens.radiusSmall,
+                    color: MiuixTheme.of(context)
+                        .colors
+                        .secondaryContainer
+                        .withValues(alpha: 0.6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      child: MiuixText(
+                        memo.remark!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: MiuixTheme.of(context)
+                            .textStyles
+                            .footnote2
+                            .copyWith(
+                                color: MiuixTheme.of(context)
+                                    .colors
+                                    .onSecondaryContainer),
+                      ),
                     ),
                   ),
                 ),
@@ -165,12 +161,12 @@ class MemoCard extends ConsumerWidget {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerRight,
-                child: Text(
+                child: MiuixText(
                   MsDateUtils.format(memo.updatedAt),
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                  style: MiuixTheme.of(context)
+                      .textStyles
+                      .footnote2
+                      .copyWith(color: MiuixTheme.of(context).colors.outline),
                 ),
               ),
             ],
@@ -179,19 +175,32 @@ class MemoCard extends ConsumerWidget {
       ],
     );
 
-    final card = Md3eCard(
-      onTap: onTap,
+    final card = MiuixCard(
+      onPressed: onTap,
       onLongPress: onLongPress,
-      borderColor: color?.withValues(alpha: 0.5),
+      feedbackType: MiuixPressFeedbackType.sink,
+      cornerRadius: AppTokens.radiusCard,
       child: body,
     );
 
-    // 若铭记已设置颜色，用铭记色覆盖整个卡片的主题（包括描边、强调色等）。
     return MemoScopedTheme(
       colorValue: memo.color,
       brightness: brightness,
       useMd3eDualSeed: useMd3e,
-      child: card,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppTokens.radiusCard),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0x08000000),
+              blurRadius: 10,
+              spreadRadius: 0,
+              offset: const Offset(0, -1),
+            ),
+          ],
+        ),
+        child: card,
+      ),
     );
   }
 
@@ -202,19 +211,22 @@ class MemoCard extends ConsumerWidget {
         if (thumb != null && File(thumb).existsSync()) {
           return ClipRRect(
             borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(Md3eTokens.radiusCard)),
+                top: Radius.circular(AppTokens.radiusCard)),
             child: RepaintBoundary(
               child: Image.file(File(thumb),
-                  height: 130, width: double.infinity, fit: BoxFit.cover,
-                  cacheWidth: 260, gaplessPlayback: true),
+                  height: 130,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  cacheWidth: 260,
+                  gaplessPlayback: true),
             ),
           );
         }
-        return _placeholder(context, Icons.photo_library_rounded,
-            Theme.of(context).colorScheme.secondaryContainer);
+        return _placeholder(context, HiuiIcons.image,
+            MiuixTheme.of(context).colors.surfaceContainerHighest);
       case MemoType.audio:
-        return _placeholder(context, Icons.graphic_eq_rounded,
-            Theme.of(context).colorScheme.tertiaryContainer);
+        return _placeholder(context, HiuiIcons.waveform,
+            MiuixTheme.of(context).colors.surfaceContainerHighest);
       case MemoType.text:
         if (memo.color != null) {
           return Container(
@@ -224,8 +236,8 @@ class MemoCard extends ConsumerWidget {
         }
         return const SizedBox.shrink();
       case MemoType.file:
-        return _placeholder(context, Icons.insert_drive_file_outlined,
-            Theme.of(context).colorScheme.surfaceContainerHighest);
+        return _placeholder(context, HiuiIcons.document,
+            MiuixTheme.of(context).colors.surfaceContainerHighest);
       case MemoType.totp:
         return _totpPreviewBand(context, ref);
       case MemoType.todo:
@@ -235,33 +247,30 @@ class MemoCard extends ConsumerWidget {
     }
   }
 
-  Widget _placeholder(BuildContext context, IconData icon, Color container) {
-    final scheme = Theme.of(context).colorScheme;
+  Widget _placeholder(BuildContext context, String icon, Color container) {
+    final colors = MiuixTheme.of(context).colors;
     return Container(
       height: 64,
       color: container,
       alignment: Alignment.center,
-      child: Icon(icon,
-          color: container == scheme.surfaceContainerHighest
-              ? scheme.primary
-              : scheme.onSecondaryContainer,
+      child: HiuiIcon(icon,
+          color: container == colors.surfaceContainerHighest
+              ? colors.primary
+              : colors.onSecondaryContainer,
           size: 32),
     );
   }
 
   Widget _totpPreviewBand(BuildContext context, WidgetRef ref) {
-    final scheme = Theme.of(context).colorScheme;
-    final nowMs =
-        ref.watch(totpTickProvider).value ?? DateTime.now().millisecondsSinceEpoch;
+    final colors = MiuixTheme.of(context).colors;
+    final nowMs = ref.watch(totpTickProvider).value ??
+        DateTime.now().millisecondsSinceEpoch;
     final cfg = totpConfigOf(memo);
-    // 缩略图底色：未设颜色时用 primaryContainer（全局主题），
-    // 已设颜色时用主色强化着色（跟随铭记色，可见度更高）。
     final Color bandBg = memo.color != null
         ? Color(memo.color!).withAlpha(28)
-        : scheme.primaryContainer;
-    final Color bandFg = memo.color != null
-        ? Color(memo.color!)
-        : scheme.primary;
+        : colors.primaryContainer;
+    final Color bandFg =
+        memo.color != null ? Color(memo.color!) : colors.primary;
     Widget content;
     if (cfg != null) {
       final code = totpCode(
@@ -271,104 +280,107 @@ class MemoCard extends ConsumerWidget {
         algorithm: cfg.algorithm,
         now: DateTime.fromMillisecondsSinceEpoch(nowMs),
       );
+      final ts = MiuixTheme.of(context).textStyles;
       content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(code,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                    color: bandFg,
-                  )),
+          MiuixText(code,
+              style: ts.title2.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: 2,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: bandFg,
+              )),
           const SizedBox(height: 2),
-          Text('点击复制',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: bandFg.withValues(alpha: 0.7))),
+          MiuixText('点击复制',
+              style:
+                  ts.footnote2.copyWith(color: bandFg.withValues(alpha: 0.7))),
         ],
       );
     } else {
+      final ts = MiuixTheme.of(context).textStyles;
       content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.pin_outlined, size: 22, color: bandFg),
+          HiuiIcon(HiuiIcons.pin, size: 22, color: bandFg),
           const SizedBox(height: 2),
-          Text('点击配置',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: bandFg.withValues(alpha: 0.7))),
+          MiuixText('点击配置',
+              style:
+                  ts.footnote2.copyWith(color: bandFg.withValues(alpha: 0.7))),
         ],
       );
     }
-    return Container(
-      height: 72,
-      color: bandBg,
-      alignment: Alignment.center,
-      child: GestureDetector(
-        onTap: cfg == null
-            ? null
-            : () async {
-                await Clipboard.setData(ClipboardData(text: totpCode(
-                  secretBase32: cfg.secret,
-                  period: cfg.period,
-                  digits: cfg.digits,
-                  algorithm: cfg.algorithm,
-                  now: DateTime.fromMillisecondsSinceEpoch(nowMs),
-                )));
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('验证码已复制'),
-                      duration: Duration(seconds: 1)));
-                }
-              },
+    if (cfg == null) {
+      return Container(
+        height: 72,
+        color: bandBg,
+        alignment: Alignment.center,
         child: content,
+      );
+    }
+    // TOTP 色带：MiuixSurface 提供按压反馈（点击复制验证码）
+    return MiuixSurface(
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(
+            text: totpCode(
+          secretBase32: cfg.secret,
+          period: cfg.period,
+          digits: cfg.digits,
+          algorithm: cfg.algorithm,
+          now: DateTime.fromMillisecondsSinceEpoch(nowMs),
+        )));
+        if (context.mounted) {
+          AppSnackbar.show(context, message: '验证码已复制');
+        }
+      },
+      cornerRadius: 0,
+      squircleEnabled: false,
+      color: bandBg,
+      child: SizedBox(
+        height: 72,
+        width: double.infinity,
+        child: Center(child: content),
       ),
     );
   }
 
   Widget _todoPreviewBand(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = MiuixTheme.of(context).colors;
     final total = (memo.metadata['todoTotal'] as num?)?.toInt() ?? 0;
     final done = (memo.metadata['todoDone'] as num?)?.toInt() ?? 0;
     final ratio = total == 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-    final color = memo.color != null ? Color(memo.color!) : scheme.primary;
+    final color = memo.color != null ? Color(memo.color!) : colors.primary;
+    final ts = MiuixTheme.of(context).textStyles;
     return Column(
       children: [
-        Container(
+        // 待办进度：MIUIX 线性进度条（替代手写分数条）
+        MiuixLinearProgressIndicator(
+          progress: ratio,
           height: 6,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(Md3eTokens.radiusCard)),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
-            widthFactor: ratio,
-            child: Container(color: color.withValues(alpha: 0.8)),
+          colors: MiuixProgressIndicatorColors(
+            foregroundColor: color.withValues(alpha: 0.8),
+            disabledForegroundColor: color.withValues(alpha: 0.4),
+            backgroundColor: colors.surfaceContainerHighest,
           ),
         ),
         if (total == 0)
           Container(
             height: 64,
             alignment: Alignment.center,
-            child: Icon(Icons.fact_check_rounded,
-                color: scheme.outlineVariant, size: 32),
+            child: HiuiIcon(HiuiIcons.checkSquare,
+                color: colors.dividerLine, size: 32),
           )
         else
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Row(
               children: [
-                Icon(Icons.check_circle,
+                HiuiIcon(HiuiIcons.checkCircle,
                     size: 16, color: color.withValues(alpha: 0.85)),
                 const SizedBox(width: 6),
-                Text('$done / $total',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: scheme.primary, fontWeight: FontWeight.w600)),
+                MiuixText('$done / $total',
+                    style: ts.footnote2.copyWith(
+                        color: colors.primary, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -376,19 +388,16 @@ class MemoCard extends ConsumerWidget {
     );
   }
 
-  /// 纪念日卡片缩略图：大字显示「还有/已过 N 天」，底色跟随铭记色。
   Widget _anniversaryPreviewBand(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = MiuixTheme.of(context).colors;
+    final ts = MiuixTheme.of(context).textStyles;
     final cfg = AnniversaryConfig.fromMemo(memo);
     final hasConfig = cfg.date.isNotEmpty;
-    // 缩略图底色：未设颜色时用 primaryContainer（全局主题），
-    // 已设颜色时用主色强化着色（跟随铭记色，可见度更高）。
     final Color bandBg = memo.color != null
         ? Color(memo.color!).withAlpha(28)
-        : scheme.primaryContainer;
-    final Color bandFg = memo.color != null
-        ? Color(memo.color!)
-        : scheme.primary;
+        : colors.primaryContainer;
+    final Color bandFg =
+        memo.color != null ? Color(memo.color!) : colors.primary;
 
     Widget content;
     if (hasConfig) {
@@ -397,21 +406,18 @@ class MemoCard extends ConsumerWidget {
       content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
+          MiuixText(
             isToday ? '今' : '${calc.absCount}',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  color: bandFg,
-                ),
+            style: ts.title2.copyWith(
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: bandFg,
+            ),
           ),
           const SizedBox(height: 2),
-          Text(
+          MiuixText(
             isToday ? '就是今天' : (calc.isUpcoming ? '天后' : '天前'),
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: bandFg.withValues(alpha: 0.7)),
+            style: ts.footnote2.copyWith(color: bandFg.withValues(alpha: 0.7)),
           ),
         ],
       );
@@ -419,13 +425,11 @@ class MemoCard extends ConsumerWidget {
       content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_outlined, size: 22, color: bandFg),
+          HiuiIcon(HiuiIcons.calendar, size: 22, color: bandFg),
           const SizedBox(height: 2),
-          Text('点击配置',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: bandFg.withValues(alpha: 0.7))),
+          MiuixText('点击配置',
+              style:
+                  ts.footnote2.copyWith(color: bandFg.withValues(alpha: 0.7))),
         ],
       );
     }

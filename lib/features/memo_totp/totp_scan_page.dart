@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/utils/totp.dart';
 
 /// 扫码导入 otpauth:// 二维码（Google Authenticator / Authy / 1Password 兼容）。
 ///
-/// 识别成功后把 [TotpConfig] 通过 Navigator.pop 回传给编辑页自动填充。
+/// 识别成功后把 [TotpConfig] 通过 context.pop 回传给编辑页自动填充。
 class TotpScanPage extends StatefulWidget {
   const TotpScanPage({super.key});
 
@@ -35,7 +36,7 @@ class _TotpScanPageState extends State<TotpScanPage> {
       if (config != null) {
         _done = true;
         _controller.stop();
-        Navigator.of(context).pop(config);
+        context.pop(config);
         return;
       }
     }
@@ -43,10 +44,11 @@ class _TotpScanPageState extends State<TotpScanPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('扫码导入 TOTP')),
-      body: Stack(
+    return AppScaffold(
+      // 沉浸式取景：黑色底 + 相机满屏，顶栏悬浮在画面之上。
+      containerColor: Colors.black,
+      topBar: const AppHeader(title: '扫码导入 TOTP'),
+      content: (context, padding) => Stack(
         fit: StackFit.expand,
         children: [
           MobileScanner(
@@ -59,46 +61,62 @@ class _TotpScanPageState extends State<TotpScanPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.no_photography_outlined,
-                          size: 48, color: scheme.onSurfaceVariant),
+                      HiuiIcon(HiuiIcons.noPhoto,
+                          size: 48,
+                          color: MiuixTheme.of(context)
+                              .colors
+                              .onSurfaceVariantSummary),
                       const SizedBox(height: 12),
-                      const Text('无法访问相机，请检查相机权限后重试'),
+                      MiuixText('无法访问相机，请检查相机权限后重试'),
                     ],
                   ),
                 ),
               );
             },
           ),
-          // 顶部遮罩说明
-          SafeArea(
+          // 顶部遮罩说明（contentPadding 已含顶栏高度与安全区）
+          Positioned(
+            top: padding.top + 16,
+            left: 0,
+            right: 0,
             child: Align(
               alignment: Alignment.topCenter,
-              child: Container(
-                margin: const EdgeInsets.only(top: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: scheme.inverseSurface.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Text(
-                  '对准 otpauth:// 二维码（发行者 · 账户名会自动填入）',
-                  style: TextStyle(color: scheme.onInverseSurface),
+              // 相机遮罩提示条：MiuixSurface 承载（替代手写 ShapeDecoration）
+              child: MiuixSurface(
+                cornerRadius: AppTokens.radiusLarge,
+                color: MiuixTheme.of(context)
+                    .colors
+                    .onSurface
+                    .withValues(alpha: 0.85),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  child: MiuixText(
+                    '对准 otpauth:// 二维码（发行者 · 账户名会自动填入）',
+                    style: TextStyle(
+                        color: MiuixTheme.of(context).colors.surface),
+                  ),
                 ),
               ),
             ),
           ),
           // 底部提示
-          SafeArea(
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Text(
-                  '支持 Google Authenticator / Authy / 1Password 导出的二维码',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: scheme.onSurfaceVariant),
-                ),
+          Positioned(
+            bottom: padding.bottom + 24,
+            left: 0,
+            right: 0,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: MiuixText(
+                '支持 Google Authenticator / Authy / 1Password 导出的二维码',
+                textAlign: TextAlign.center,
+                style: MiuixTheme.of(context)
+                    .textStyles
+                    .footnote1
+                    .copyWith(
+                        color: MiuixTheme.of(context)
+                            .colors
+                            .onSurfaceVariantSummary),
               ),
             ),
           ),

@@ -2,6 +2,7 @@ import 'dart:isolate';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_cropper/image_cropper.dart';
@@ -124,11 +125,8 @@ class MediaController {
     final thumb = await _ref
         .read(importServiceProvider)
         .generateImageThumb(path, item.memoId);
-    await _ref.read(memoRepositoryProvider).upsertMedia(item.copyWith(
-          width: result.width,
-          height: result.height,
-          thumbPath: thumb,
-        ));
+    await _replaceThumbAndRefresh(item, thumb,
+        width: result.width, height: result.height);
   }
 
   /// 调起系统裁剪 UI，结果覆盖原图。
@@ -146,16 +144,58 @@ class MediaController {
     );
     if (cropped == null) return null;
     final bytes = await cropped.readAsBytes();
+    // 原路径覆盖写入：内容变了但路径没变。
     await File(item.path).writeAsBytes(bytes, flush: true);
     final service = _ref.read(importServiceProvider);
     final size = await service.readImageSize(item.path);
     final thumb = await service.generateImageThumb(item.path, item.memoId);
-    await _ref.read(memoRepositoryProvider).upsertMedia(item.copyWith(
-          width: size?.width,
-          height: size?.height,
-          thumbPath: thumb,
-        ));
+    await _replaceThumbAndRefresh(item, thumb,
+        width: size?.width, height: size?.height);
     return item.path;
+  }
+
+  /// 原图被覆盖写入（裁剪/旋转共用）后的统一收尾：
+  /// 1. 逐出内存图片缓存 —— FileImage 以路径为缓存键，路径未变、内容已变时
+  ///    不逐出的话，查看页（PhotoView）与任何引用原图的视图都会命中旧图；
+  /// 2. 写回新的尺寸/缩略图路径（缩略图每次生成新文件，天然避开旧缓存）；
+  /// 3. 删除被替换的旧缩略图文件，避免缓存目录残留孤儿文件；
+  /// 4. 刷新 memo.thumbnailPath 封面与计数，主页列表缩略图立即跟随更新。
+  Future<void> _replaceThumbAndRefresh(
+    MediaItem item,
+    String? newThumb, {
+    int? width,
+    int? height,
+  }) async {
+    // 逐出旧原图缓存（必须在下次 resolve 前执行）。
+    _evictImageCache(item.path);
+    final oldThumb = item.thumbPath;
+    await _ref.read(memoRepositoryProvider).upsertMedia(item.copyWith(
+          width: width,
+          height: height,
+          thumbPath: newThumb,
+        ));
+    // 先刷新封面再删旧缩略图，避免出现指向已删除文件的空窗。
+    await _refreshCount(item.memoId);
+    if (oldThumb != null &&
+        oldThumb != newThumb &&
+        File(oldThumb).existsSync()) {
+      try {
+        File(oldThumb).deleteSync();
+      } catch (_) {
+        // 删除失败不影响主流程（缓存目录会被「清除缩略图缓存」统一清理）。
+      }
+    }
+  }
+
+  /// 逐出指定路径的内存图片缓存（FileImage 默认 scale 1.0，与
+  /// Image.file / PhotoView 的用法一致）。
+  void _evictImageCache(String path) {
+    try {
+      PaintingBinding.instance.imageCache
+          .evict(FileImage(File(path), scale: 1.0));
+    } catch (_) {
+      // 缓存逐出失败不影响数据写入流程。
+    }
   }
 
   Future<void> _refreshCount(String memoId) async {

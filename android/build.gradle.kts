@@ -34,13 +34,12 @@ subprojects {
             .findByType(com.android.build.api.variant.ApplicationAndroidComponentsExtension::class.java)
             ?.finalizeDsl { dsl ->
                 dsl.compileSdk = 36
-                // 【硬约束·仅 arm64-v8a】Flutter Gradle 插件会在配置期向 :app 注入完整
-                // ABI 集合（armeabi-v7a,arm64-v8a,x86_64），导致 Dart 原生资产
-                // (libdartjni/libdatastore_shared_counter) 等按全部 ABI 打包。这里在
-                // DSL 最终化阶段（Flutter 注入之后、变体锁定之前）清空并只保留 arm64-v8a，
-                // mergeNativeLibs 会据此过滤所有来源的原生库，最终 APK 仅含 lib/arm64-v8a。
+                // 【ABI 策略】ABI 收敛统一由 :app 的 splits.abi(include arm64-v8a) 完成。
+                // 但 Flutter Gradle 插件仍会向 :app 注入多 ABI 的 ndk.abiFilters，
+                // 而 AGP 规定 ndk.abiFilters 与 splits.abi 互斥（"Conflicting
+                // configuration"）。因此在 DSL 最终化阶段（Flutter 注入之后）
+                // 清空 ndk.abiFilters，交由 splits 过滤。
                 dsl.defaultConfig.ndk.abiFilters.clear()
-                dsl.defaultConfig.ndk.abiFilters.add("arm64-v8a")
             }
     }
 }

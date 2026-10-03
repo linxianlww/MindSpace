@@ -1,8 +1,9 @@
 import 'dart:io';
 
 import 'package:chewie/chewie.dart';
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:video_player/video_player.dart';
 
@@ -29,6 +30,9 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
       PageController(initialPage: widget.initialIndex);
   late int _index = widget.initialIndex;
 
+  /// AppScaffold 子树内的宿主 context（弹层 API 需要脚手架下方的 context）。
+  BuildContext? _hostCtx;
+
   @override
   void dispose() {
     _page.dispose();
@@ -41,26 +45,34 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
     final memoAsync = ref.watch(memoDetailProvider(widget.memoId));
     return async.when(
       loading: () =>
-          const Scaffold(backgroundColor: Colors.black, body: SizedBox.shrink()),
-      error: (e, _) => Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: Text('$e', style: const TextStyle(color: Colors.white))),
+          const AppScaffold(containerColor: Colors.black, body: SizedBox.shrink()),
+      error: (e, _) => AppScaffold(
+        containerColor: Colors.black,
+        body: Center(
+            child: MiuixText('$e', style: const TextStyle(color: Colors.white))),
       ),
       data: (items) {
-        if (items.isEmpty) return const Scaffold(backgroundColor: Colors.black);
+        if (items.isEmpty) {
+          return AppScaffold(containerColor: Colors.black);
+        }
         final item = items[_index.clamp(0, items.length - 1)];
-        return Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black54,
-            foregroundColor: Colors.white,
-            iconTheme: const IconThemeData(color: Colors.white),
-            title: Text('${_index + 1}/${items.length}',
-                style: const TextStyle(color: Colors.white)),
+        return AppScaffold(
+          containerColor: Colors.black,
+          // 沉浸式顶栏：AppHeader 不支持自定义配色，直接构造
+          // MiuixSmallTopAppBar（黑底白字 + 白色图标）。
+          topBar: MiuixSmallTopAppBar(
+            title: '${_index + 1}/${items.length}',
+            color: Colors.black54,
+            titleColor: Colors.white,
+            navigationIcon: MiuixIconButton(
+              // go_router 返回：查看器仅由编辑页 push 进入，pop 安全
+              onPressed: () => context.pop(),
+              child: const HiuiIcon(HiuiIcons.arrowBack, color: Colors.white),
+            ),
             actions: [
               if (item.kind == MediaKind.image) ...[
-                IconButton(
-                  icon: const Icon(Icons.rotate_right, color: Colors.white),
+                AppTapIcon(
+                  icon: const HiuiIcon(HiuiIcons.rotateRight, color: Colors.white),
                   onPressed: () async {
                     await ref
                         .read(mediaControllerProvider)
@@ -68,16 +80,18 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
                     if (mounted) setState(() {});
                   },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.crop, color: Colors.white),
+                AppTapIcon(
+                  icon: const HiuiIcon(HiuiIcons.crop, color: Colors.white),
                   onPressed: () =>
                       ref.read(mediaControllerProvider).crop(item),
                 ),
               ],
-              IconButton(
-                icon: const Icon(Icons.label_outline, color: Colors.white),
+              AppTapIcon(
+                icon: const HiuiIcon(HiuiIcons.tag, color: Colors.white),
                 onPressed: () async {
-                  final r = await MediaRemarkDialog.show(context,
+                  final hostCtx = _hostCtx;
+                  if (hostCtx == null || !hostCtx.mounted) return;
+                  final r = await MediaRemarkDialog.show(hostCtx,
                       initial: item.remark);
                   if (r != null) {
                     await ref
@@ -86,57 +100,68 @@ class _MediaViewerPageState extends ConsumerState<MediaViewerPage> {
                   }
                 },
               ),
-              IconButton(
-                icon: const Icon(Icons.add_to_home_screen, color: Colors.white),
+              AppTapIcon(
+                icon: const HiuiIcon(HiuiIcons.export, color: Colors.white),
                 tooltip: '添加到桌面',
                 onPressed: () {
                   final memo = memoAsync.value;
-                  if (memo != null) {
-                    addMemoToDesktop(context, ref, memo);
+                  final hostCtx = _hostCtx;
+                  if (memo != null && hostCtx != null && hostCtx.mounted) {
+                    addMemoToDesktop(hostCtx, ref, memo);
                   }
                 },
               ),
             ],
           ),
-          body: Column(
-            children: [
-              Expanded(
-                child: PageView.builder(
-                  controller: _page,
-                  itemCount: items.length,
-                  onPageChanged: (i) => setState(() => _index = i),
-                  itemBuilder: (_, i) {
-                    final it = items[i];
-                    return it.kind == MediaKind.image
-                        ? PhotoView(
-                            imageProvider: FileImage(File(it.path)),
-                            minScale: PhotoViewComputedScale.contained,
-                            maxScale: PhotoViewComputedScale.covered * 4,
-                            backgroundDecoration:
-                                const BoxDecoration(color: Colors.black),
-                          )
-                        : _VideoPlayer(path: it.path);
-                  },
-                ),
-              ),
-              // 备注标签展示在图片查看页下方。
-              if ((item.remark ?? '').isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  color: Colors.black54,
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: 10,
-                    bottom: 10 + MediaQuery.paddingOf(context).bottom,
-                  ),
-                  child: Text(
-                    item.remark!,
-                    style: const TextStyle(color: Colors.white70),
+          // 沉浸式内容：不消化顶栏 padding，图片/视频铺满全屏并延伸到
+          // 半透明顶栏之下；备注条自行处理底部安全区。
+          content: (context, padding) => Builder(builder: (hostCtx) {
+            _hostCtx = hostCtx;
+            return Column(
+              children: [
+                Expanded(
+                  child: PageView.builder(
+                    controller: _page,
+                    itemCount: items.length,
+                    onPageChanged: (i) => setState(() => _index = i),
+                    itemBuilder: (_, i) {
+                      final it = items[i];
+                      return it.kind == MediaKind.image
+                          ? PhotoView(
+                              // 裁剪/旋转会原路径覆盖图片内容（路径不变），
+                              // thumbPath 每次重新生成必然变化；用它作 key
+                              // 强制重建 PhotoView，配合 MediaController 对
+                              // 旧路径的缓存逐出，确保立即显示新图。
+                              key: ValueKey('photo-${it.id}-${it.thumbPath}'),
+                              imageProvider: FileImage(File(it.path)),
+                              minScale: PhotoViewComputedScale.contained,
+                              maxScale: PhotoViewComputedScale.covered * 4,
+                              backgroundDecoration:
+                                  const BoxDecoration(color: Colors.black),
+                            )
+                          : _VideoPlayer(path: it.path);
+                    },
                   ),
                 ),
-            ],
-          ),
+                // 备注标签展示在图片查看页下方。
+                if ((item.remark ?? '').isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    color: Colors.black54,
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 10,
+                      bottom: 10 + MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: MiuixText(
+                      item.remark!,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ),
+              ],
+            );
+          }),
         );
       },
     );
@@ -175,7 +200,7 @@ class _VideoPlayerState extends State<_VideoPlayer> {
         looping: false,
         aspectRatio: vp.value.aspectRatio,
         materialProgressColors: ChewieProgressColors(
-          playedColor: Theme.of(context).colorScheme.primary,
+          playedColor: MiuixTheme.of(context).colors.primary,
         ),
       );
     });
@@ -195,7 +220,7 @@ class _VideoPlayerState extends State<_VideoPlayer> {
     final chewie = _chewie;
     if (chewie == null) {
       return const Center(
-          child: CircularProgressIndicator(color: Colors.white));
+          child: MiuixInfiniteProgressIndicator(color: Colors.white));
     }
     return Center(child: Chewie(controller: chewie));
   }

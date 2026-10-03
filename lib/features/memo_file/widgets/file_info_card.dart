@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../../../core/utils/file_utils.dart';
 
@@ -21,20 +21,24 @@ class FileInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = MiuixTheme.of(context).colors;
+    final textStyles = MiuixTheme.of(context).textStyles;
     final modified =
         File(path).existsSync() ? File(path).statSync().modified : null;
-    return Card(
+    return MiuixSurface(
+      cornerRadius: AppTokens.radiusMedium,
+      color: scheme.surfaceContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
+                AppAvatar(
                   radius: 28,
                   backgroundColor: scheme.secondaryContainer,
-                  child: Icon(Icons.description_outlined,
+                  child: HiuiIcon(HiuiIcons.document,
                       color: scheme.onSecondaryContainer),
                 ),
                 const SizedBox(width: 14),
@@ -42,35 +46,32 @@ class FileInfoCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(name,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      Text('.${ext.isEmpty ? '未知' : ext}  ·  ${FileUtils.humanSize(sizeBytes)}',
-                          style: Theme.of(context).textTheme.bodySmall),
+                      MiuixText(name,
+                          style: textStyles.title4,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      MiuixText(
+                        '.${ext.isEmpty ? '未知' : ext}  ·  ${FileUtils.humanSize(sizeBytes)}',
+                        style: textStyles.footnote1,
+                        color: scheme.onSurfaceVariantSummary,
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            const Divider(height: 24),
             // 隐私考虑：不展示应用内部完整路径，仅显示文件名/大小/修改时间。
-            if (modified != null) _row(context, '修改时间', modified.toString()),
+            if (modified != null) ...[
+              const AppSeparator(),
+              MiuixText(
+                '修改于 $modified',
+                style: textStyles.footnote1,
+                color: scheme.onSurfaceVariantSummary,
+              ),
+            ],
           ],
         ),
       ),
     );
   }
-
-  Widget _row(BuildContext context, String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-                width: 72,
-                child: Text(k,
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-            Expanded(child: SelectableText(v)),
-          ],
-        ),
-      );
 }

@@ -1,12 +1,9 @@
-import 'dart:ui';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_miuix/miuix.dart';
 
-import 'package:flutter/material.dart';
+import '../../ui/design_system/tokens.dart';
 
-import '../theme/md3e_tokens.dart';
-
-/// 浮动工具栏：半透明 + 毛玻璃 + 大圆角 + 横向滚动。
-///
-/// 文本编辑器在键盘弹出时贴底显示；按钮由调用方以 [ToolbarItem] 提供。
+/// 浮动工具栏：毛玻璃卡片 + 横向滚动，MIUIX 风格（文本编辑等页内使用）。
 class FloatingToolbar extends StatelessWidget {
   const FloatingToolbar({super.key, required this.items, this.height = 52});
 
@@ -15,59 +12,54 @@ class FloatingToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final colors = MiuixTheme.of(context).colors;
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     final sysBottomPadding = MediaQuery.paddingOf(context).bottom;
-    // 仅当键盘未弹出时才需要系统导航栏高度的额外 padding；
-    // 键盘弹出时 viewInsets.bottom 已包含工具栏位置（Scaffold resizeToAvoidBottomInset 已上推内容）。
     final double extraBottom = bottomInset <= 0 ? sysBottomPadding : 0.0;
     return Padding(
       padding: EdgeInsets.only(bottom: extraBottom),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(Md3eTokens.radiusBar),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            height: height,
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest.withValues(alpha: 0.82),
-              borderRadius: BorderRadius.circular(Md3eTokens.radiusBar),
-              border: Border.all(
-                  color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      child: MiuixCard(
+        cornerRadius: AppTokens.radiusBar,
+        insideMargin: EdgeInsets.zero,
+        feedbackType: MiuixPressFeedbackType.none,
+        child: SizedBox(
+          height: height,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            shrinkWrap: true,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => MiuixVerticalDivider(
+              thickness: 0.75,
             ),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              shrinkWrap: true,
-              itemCount: items.length,
-              separatorBuilder: (_, __) => VerticalDivider(
-                width: 1,
-                indent: 12,
-                endIndent: 12,
-                color: scheme.outlineVariant,
-              ),
-              itemBuilder: (_, i) {
-                final item = items[i];
-                return Tooltip(
-                  message: item.tooltip ?? '',
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: item.onTap,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Icon(
-                        item.icon,
-                        size: 22,
-                        color: item.active
-                            ? scheme.primary
-                            : scheme.onSurfaceVariant,
-                      ),
-                    ),
+            itemBuilder: (_, i) {
+              final item = items[i];
+              final tooltip = item.tooltip;
+              // MiuixIconButton 自带按压反馈（替代裸 GestureDetector）
+              // 图标着色由调用方在构造 [ToolbarItem.icon] 时决定
+              // （active 用 primary，否则 onSurfaceSecondary）。
+              final Widget button = MiuixIconButton(
+                onPressed: item.onTap,
+                minWidth: 44,
+                minHeight: 40,
+                child: item.icon,
+              );
+              if (tooltip == null || tooltip.isEmpty) return button;
+              return MiuixTooltipBox(
+                tooltip: (ctx, _) => MiuixSurface(
+                  color: colors.surface,
+                  contentColor: colors.onSurface,
+                  cornerRadius: AppTokens.radiusMedium,
+                  shadowElevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    child: MiuixText(tooltip,
+                        style: MiuixTheme.of(ctx).textStyles.footnote1),
                   ),
-                );
-              },
-            ),
+                ),
+                child: button,
+              );
+            },
           ),
         ),
       ),
@@ -83,7 +75,8 @@ class ToolbarItem {
     this.active = false,
   });
 
-  final IconData icon;
+  /// 图标 widget（调用点用 `HiuiIcon(HiuiIcons.x, size: 22, color: ...)`）。
+  final Widget icon;
   final VoidCallback onTap;
   final String? tooltip;
   final bool active;

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用快捷方式（App Shortcuts）：长按桌面图标弹出的快捷菜单 -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 新建文本 -->
+    <shortcut
+        android:shortcutId="new_text"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_text"
+        android:shortcutShortLabel="@string/shortcut_new_text"
+        android:shortcutLongLabel="@string/shortcut_new_text_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nekobox://app/text/new"
+            android:targetPackage="aria.neko.box"
+            android:targetClass="aria.neko.box.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <!-- 新建待办 -->
+    <shortcut
+        android:shortcutId="new_todo"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_todo"
+        android:shortcutShortLabel="@string/shortcut_new_todo"
+        android:shortcutLongLabel="@string/shortcut_new_todo_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="nekobox://app/todo/new"
+            android:targetPackage="aria.neko.box"
+            android:targetClass="aria.neko.box.MainActivity" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+</shortcuts>

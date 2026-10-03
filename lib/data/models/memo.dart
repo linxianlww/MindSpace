@@ -1,4 +1,7 @@
-import 'package:flutter/material.dart';
+
+
+import 'dart:ui' show Color;
+
 import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'memo_type.dart';

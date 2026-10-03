@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -85,8 +85,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/memo/media/:memoId',
-        pageBuilder: (c, s) =>
-            _sharedAxis(MediaViewerPage(memoId: s.pathParameters['memoId']!)),
+        pageBuilder: (c, s) => _sharedAxis(MediaViewerPage(
+          memoId: s.pathParameters['memoId']!,
+          // 允许通过 extra 传入点击的下标（编辑页进入查看器时使用）
+          initialIndex: (s.extra as int?) ?? 0,
+        )),
       ),
       // 音频
       GoRoute(
@@ -170,8 +173,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (c, s) => _sharedAxis(const SettingsPage()),
       ),
     ],
-    errorBuilder: (c, s) => Scaffold(
-      appBar: AppBar(title: const Text('页面不存在')),
+    errorBuilder: (c, s) => AppScaffold(
+      topBar: AppHeader(title: '页面不存在'),
       body: Center(child: Text(s.error?.toString() ?? '未知路由')),
     ),
   );

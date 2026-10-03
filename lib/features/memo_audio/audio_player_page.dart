@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/file_types.dart';
 import '../../../core/di/providers.dart';
@@ -11,7 +12,6 @@ import '../../../core/utils/uuid_utils.dart';
 import '../share/share_service.dart';
 import '../home/home_provider.dart';
 import 'audio_provider.dart';
-import 'audio_recorder_page.dart';
 import 'widgets/audio_trimmer.dart';
 import 'widgets/subtitle_view.dart';
 import 'widgets/waveform_view.dart';
@@ -24,20 +24,16 @@ class AudioPlayerPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final memoAsync = ref.watch(memoDetailProvider(memoId));
-    return Scaffold(
-      appBar: AppBar(
-        // 与其它铭记页一致：标题跟随重命名实时刷新。
-        title: Text(
-          memoAsync.maybeWhen(
-            data: (m) => m?.title ?? '音频铭记',
-            orElse: () => '音频铭记',
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+    return AppScaffold(
+      topBar: AppHeader(
+        title: memoAsync.maybeWhen(
+          data: (m) => m?.title ?? '音频铭记',
+          orElse: () => '音频铭记',
         ),
+        alwaysSmall: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.ios_share),
+          AppTapIcon(
+            icon: const HiuiIcon(HiuiIcons.share),
             onPressed: () {
               final m = memoAsync.value;
               final path = m?.metadata['originalPath'] as String?;
@@ -46,8 +42,8 @@ class AudioPlayerPage extends ConsumerWidget {
               }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.add_to_home_screen),
+          AppTapIcon(
+            icon: const HiuiIcon(HiuiIcons.export),
             tooltip: '添加到桌面',
             onPressed: () {
               final m = memoAsync.value;
@@ -59,26 +55,31 @@ class AudioPlayerPage extends ConsumerWidget {
         ],
       ),
       body: memoAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        loading: () => const Center(child: AppCircleProgress()),
+        error: (e, _) => Center(child: MiuixText('$e')),
         data: (memo) {
-          if (memo == null) return const Center(child: Text('铭记不存在'));
+          if (memo == null) return const Center(child: MiuixText('铭记不存在'));
           final hasAudio = memo.metadata['originalPath'] != null;
           if (!hasAudio) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('还没有音频'),
+                  const MiuixText('还没有音频'),
                   const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => AudioRecorderPage(memoId: memoId),
-                      ),
+                  AppButton(
+                    // 录音页已在路由表中注册（/memo/audio/:memoId/record），
+                    // pushReplacement 走 go_router 以保持路由栈一致。
+                    onPressed: () =>
+                        context.pushReplacement('/memo/audio/$memoId/record'),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        HiuiIcon(HiuiIcons.mic),
+                        SizedBox(width: 8),
+                        MiuixText('去录音'),
+                      ],
                     ),
-                    icon: const Icon(Icons.mic),
-                    label: const Text('去录音'),
                   ),
                 ],
               ),
@@ -95,86 +96,127 @@ class AudioPlayerPage extends ConsumerWidget {
 ///
 /// 只在这里 watch 低频字段（就绪态/错误/字幕/裁剪值）；高频变化的
 /// positionMs 由 [_WavePanel] 通过 select 单独消费，避免播放时整页重建。
-class _PlayerBody extends ConsumerWidget {
+class _PlayerBody extends ConsumerStatefulWidget {
   const _PlayerBody({required this.memoId});
   final String memoId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PlayerBody> createState() => _PlayerBodyState();
+}
+
+class _PlayerBodyState extends ConsumerState<_PlayerBody> {
+  int _tabIndex = 0;
+
+  /// 上一次选中的页签，用于计算切换动画的滑入方向。
+  int _lastTabIndex = 0;
+  static const _tabs = ['字幕', '信息'];
+
+  @override
+  Widget build(BuildContext context) {
+    final memoId = widget.memoId;
     final memo = ref.watch(memoDetailProvider(memoId)).value!;
+    final subs = ref.watch(audioPlayerProvider(memoId).select((v) => v.subs));
+    final activeIndex =
+        ref.watch(audioPlayerProvider(memoId).select((v) => v.activeSubIndex));
     final ready = ref.watch(audioPlayerProvider(memoId).select((v) => v.ready));
     final error = ref.watch(audioPlayerProvider(memoId).select((v) => v.error));
-    final subs = ref.watch(audioPlayerProvider(memoId).select((v) => v.subs));
-    final activeIndex = ref
-        .watch(audioPlayerProvider(memoId).select((v) => v.activeSubIndex));
-    // 裁剪值/时长低频变化，由信息 Tab 与裁剪 sheet 使用。
-    final durationMs =
-        ref.watch(audioPlayerProvider(memoId).select((v) => v.durationMs));
-    final fullDurationMs =
-        ref.watch(audioPlayerProvider(memoId).select((v) => v.fullDurationMs));
-    final trimStartMs =
-        ref.watch(audioPlayerProvider(memoId).select((v) => v.trimStartMs));
-    final trimEndMs =
-        ref.watch(audioPlayerProvider(memoId).select((v) => v.trimEndMs));
     final notifier = ref.read(audioPlayerProvider(memoId).notifier);
 
-    return DefaultTabController(
-      length: 2,
-      child: Column(
-        children: [
-          // 面板区可收缩：横屏/小屏高度不足时内部滚动，防止 RenderFlex 溢出。
-          Flexible(
-            flex: 0,
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                child: Column(
-                  children: [
-                    Text(memo.title,
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 16),
-                    _StatusBanner(
-                        error: error, ready: ready, onRetry: notifier.retry),
-                    const SizedBox(height: 16),
-                    // 独立消费者：positionMs 每 200ms 变化，仅波形/时间重建。
-                    _WavePanel(memoId: memoId),
-                    const SizedBox(height: 8),
-                    _ControlsPanel(memoId: memoId),
-                    _TrimButtons(
-                      memoId: memoId,
-                      fullDurationMs: fullDurationMs,
-                      durationMs: durationMs,
-                      trimStartMs: trimStartMs,
-                      trimEndMs: trimEndMs,
-                      onApply: notifier.setTrimWindow,
-                    ),
-                  ],
-                ),
+    return Column(
+      children: [
+        // 面板区可收缩：横屏/小屏高度不足时内部滚动，防止 RenderFlex 溢出。
+        Flexible(
+          flex: 0,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Column(
+                children: [
+                  MiuixText(memo.title,
+                      style: MiuixTheme.of(context).textStyles.title3),
+                  const SizedBox(height: 16),
+                  _StatusBanner(
+                      error: error, ready: ready, onRetry: notifier.retry),
+                  const SizedBox(height: 16),
+                  // 独立消费者：positionMs 每 200ms 变化，仅波形/时间重建。
+                  _WavePanel(memoId: memoId),
+                  const SizedBox(height: 8),
+                  _ControlsPanel(memoId: memoId),
+                  _TrimButtons(
+                    memoId: memoId,
+                    fullDurationMs: ref.watch(audioPlayerProvider(memoId)
+                        .select((v) => v.fullDurationMs)),
+                    durationMs: ref.watch(audioPlayerProvider(memoId)
+                        .select((v) => v.durationMs)),
+                    trimStartMs: ref.watch(audioPlayerProvider(memoId)
+                        .select((v) => v.trimStartMs)),
+                    trimEndMs: ref.watch(
+                        audioPlayerProvider(memoId).select((v) => v.trimEndMs)),
+                    onApply: notifier.setTrimWindow,
+                  ),
+                ],
               ),
             ),
           ),
-          const TabBar(tabs: [Tab(text: '字幕'), Tab(text: '信息')]),
-          Expanded(
-            child: TabBarView(
-              children: [
-                SubtitleView(
-                  subs: subs,
-                  activeIndex: activeIndex,
-                  onTap: notifier.jumpToSubtitle,
+        ),
+        const SizedBox(height: 8),
+        // 与页面既有 20 水平边距取齐，不再占满全宽。
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: AppTabStrip(
+            tabs: _tabs,
+            selectedIndex: _tabIndex,
+            onTabSelected: (i) => setState(() {
+              if (i == _tabIndex) return;
+              _lastTabIndex = _tabIndex;
+              _tabIndex = i;
+            }),
+          ),
+        ),
+        // 页签内容左右滑动切换：新页从旧页方向滑入，旧页向反向滑出
+        // （播放状态在 provider 层，不受影响）。
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            switchInCurve: AppTokens.curveStandard,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) {
+              final dir = (_tabIndex - _lastTabIndex).sign;
+              final isNew = child.key == ValueKey(_tabIndex);
+              final begin =
+                  isNew ? Offset(dir * 0.06, 0) : Offset(-dir * 0.06, 0);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: begin, end: Offset.zero)
+                      .animate(animation),
+                  child: child,
                 ),
-                _InfoTab(
-                  memoId: memoId,
-                  // 信息页时长以播放器实时状态为准；播放器未就绪时回退
-                  // 到持久化 meta 中的旧值。
-                  durationMs: ready ? durationMs : null,
-                  trimStartMs: trimStartMs,
-                  trimEndMs: trimEndMs,
-                ),
-              ],
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey(_tabIndex),
+              child: _tabIndex == 0
+                  ? SubtitleView(
+                      subs: subs,
+                      activeIndex: activeIndex,
+                      onTap: notifier.jumpToSubtitle,
+                    )
+                  : _InfoTab(
+                      memoId: memoId,
+                      durationMs: ready
+                          ? ref.watch(audioPlayerProvider(memoId)
+                              .select((v) => v.durationMs))
+                          : null,
+                      trimStartMs: ref.watch(audioPlayerProvider(memoId)
+                          .select((v) => v.trimStartMs)),
+                      trimEndMs: ref.watch(audioPlayerProvider(memoId)
+                          .select((v) => v.trimEndMs)),
+                    ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -192,24 +234,29 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final scheme = MiuixTheme.of(context).colors;
     if (error != null) {
-      return Card(
+      return MiuixSurface(
+        cornerRadius: AppTokens.radiusMedium,
         color: scheme.errorContainer.withValues(alpha: 0.6),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(Icons.error_outline, color: scheme.onErrorContainer),
+              HiuiIcon(HiuiIcons.error, color: scheme.onErrorContainer),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(error!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: scheme.onErrorContainer)),
+                child: MiuixText(error!,
+                    style: MiuixTheme.of(context)
+                        .textStyles
+                        .body1
+                        .copyWith(color: scheme.onErrorContainer)),
               ),
-              TextButton(onPressed: onRetry, child: const Text('重试')),
+              AppButton(
+                variant: AppButtonStyle.text,
+                onPressed: onRetry,
+                child: const MiuixText('重试'),
+              ),
             ],
           ),
         ),
@@ -222,10 +269,10 @@ class _StatusBanner extends StatelessWidget {
           const SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: AppCircleProgress(strokeWidth: 2),
           ),
           const SizedBox(width: 10),
-          Text('正在加载音频…', style: Theme.of(context).textTheme.bodyMedium),
+          MiuixText('正在加载音频…', style: MiuixTheme.of(context).textStyles.body1),
         ],
       );
     }
@@ -263,8 +310,8 @@ class _WavePanel extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(MsDateUtils.formatDuration(pos)),
-            Text(MsDateUtils.formatDuration(dur)),
+            MiuixText(MsDateUtils.formatDuration(pos)),
+            MiuixText(MsDateUtils.formatDuration(dur)),
           ],
         ),
       ],
@@ -283,37 +330,53 @@ class _ControlsPanel extends ConsumerWidget {
         ref.watch(audioPlayerProvider(memoId).select((v) => v.playing));
     final looping =
         ref.watch(audioPlayerProvider(memoId).select((v) => v.looping));
-    final speed =
-        ref.watch(audioPlayerProvider(memoId).select((v) => v.speed));
+    final speed = ref.watch(audioPlayerProvider(memoId).select((v) => v.speed));
     final notifier = ref.read(audioPlayerProvider(memoId).notifier);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        IconButton(
-          iconSize: 30,
-          icon: Icon(looping ? Icons.repeat_one : Icons.repeat),
-          color: looping ? Theme.of(context).colorScheme.primary : null,
+        AppTapIcon(
+          size: 30,
+          icon: const HiuiIcon(HiuiIcons.repeat, size: 30),
+          color: looping ? MiuixTheme.of(context).colors.primary : null,
           onPressed: notifier.toggleLoop,
         ),
         const SizedBox(width: 8),
-        FloatingActionButton(
+        MiuixFloatingActionButton(
           onPressed: notifier.toggle,
-          child: Icon(playing ? Icons.pause : Icons.play_arrow),
+          child: HiuiIcon(playing ? HiuiIcons.pause : HiuiIcons.play,
+              color: MiuixTheme.of(context).colors.onPrimary),
         ),
         const SizedBox(width: 8),
-        PopupMenuButton<double>(
-          icon: Text('${speed}x', style: const TextStyle(fontWeight: FontWeight.w600)),
-          onSelected: notifier.setSpeed,
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 0.75, child: Text('0.75x')),
-            PopupMenuItem(value: 1.0, child: Text('1.0x')),
-            PopupMenuItem(value: 1.25, child: Text('1.25x')),
-            PopupMenuItem(value: 1.5, child: Text('1.5x')),
-            PopupMenuItem(value: 2.0, child: Text('2.0x')),
-          ],
-        ),
+        _SpeedMenu(speed: speed, onSelected: notifier.setSpeed),
       ],
+    );
+  }
+}
+
+class _SpeedMenu extends StatelessWidget {
+  const _SpeedMenu({required this.speed, required this.onSelected});
+  final double speed;
+  final ValueChanged<double> onSelected;
+
+  static const _speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
+
+  @override
+  Widget build(BuildContext context) {
+    // 锚定下拉菜单替代底部抽屉：触发器保持原有速度文字外观
+    // （MiuixIconButton 默认透明背景，无背景圆角）。
+    return MiuixOverlayIconDropdownMenu(
+      entry: MiuixDropdownEntry(items: [
+        for (final s in _speeds)
+          MiuixDropdownItem(
+            text: '${s}x',
+            selected: s == speed,
+            onClick: () => onSelected(s),
+          ),
+      ]),
+      child: MiuixText('${speed}x',
+          style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }
@@ -338,35 +401,49 @@ class _TrimButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = MiuixTheme.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        TextButton.icon(
-          onPressed: () => showModalBottomSheet(
+        AppButton(
+          variant: AppButtonStyle.text,
+          onPressed: () => AppSheet.show<void>(
             context: context,
-            showDragHandle: true,
-            // 横屏（高度受限）下允许 sheet 占满全屏并内部滚动。
-            isScrollControlled: true,
-            builder: (_) => SafeArea(
-              child: SingleChildScrollView(
-                child: AudioTrimmer(
-                  memoId: memoId,
-                  // 滑块坐标始终基于文件原始全长。
-                  durationMs: fullDurationMs > 0 ? fullDurationMs : durationMs,
-                  initialStart: trimStartMs,
-                  initialEnd: trimEndMs,
-                  onApply: onApply,
-                ),
+            builder: (_) => SingleChildScrollView(
+              child: AudioTrimmer(
+                memoId: memoId,
+                // 滑块坐标始终基于文件原始全长。
+                durationMs: fullDurationMs > 0 ? fullDurationMs : durationMs,
+                initialStart: trimStartMs,
+                initialEnd: trimEndMs,
+                onApply: onApply,
               ),
             ),
           ),
-          icon: const Icon(Icons.content_cut),
-          label: const Text('裁剪'),
+          // 操作行统一规格：primary 色 18 图标 + body2/onSurface 文字。
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HiuiIcon(HiuiIcons.cut, size: 18, color: theme.colors.primary),
+              const SizedBox(width: 6),
+              MiuixText('裁剪',
+                  style: theme.textStyles.body2, color: theme.colors.onSurface),
+            ],
+          ),
         ),
-        TextButton.icon(
+        AppButton(
+          variant: AppButtonStyle.text,
           onPressed: () => _importSubtitle(context, ref),
-          icon: const Icon(Icons.subtitles_outlined),
-          label: const Text('导入字幕'),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              HiuiIcon(HiuiIcons.subtitles,
+                  size: 18, color: theme.colors.primary),
+              const SizedBox(width: 6),
+              MiuixText('导入字幕',
+                  style: theme.textStyles.body2, color: theme.colors.onSurface),
+            ],
+          ),
         ),
       ],
     );
@@ -389,11 +466,10 @@ class _TrimButtons extends ConsumerWidget {
     await ref.read(memoRepositoryProvider).replaceSubtitles(items);
     ref.invalidate(memoDetailProvider(memoId));
     // 播放器以 memoId 为 key 且不随 memo 变化重建，必须显式刷新字幕列表，
-    // 否则“提示成功但字幕区仍空白”。
+    // 否则"提示成功但字幕区仍空白"。
     await ref.read(audioPlayerProvider(memoId).notifier).reloadSubtitles();
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('已导入 ${items.length} 条字幕')));
+      AppSnackbar.show(context, message: '已导入 ${items.length} 条字幕');
     }
   }
 }
@@ -427,34 +503,34 @@ class _InfoTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        ListTile(
-          leading: const Icon(Icons.title),
-          title: const Text('标题'),
-          subtitle: Text(memo.title),
+        AppListRow(
+          leading: const HiuiIcon(HiuiIcons.heading),
+          title: const MiuixText('标题'),
+          subtitle: MiuixText(memo.title),
         ),
-        ListTile(
-          leading: const Icon(Icons.timer_outlined),
-          title: const Text('时长'),
-          subtitle: Text(MsDateUtils.formatDuration(dur)),
+        AppListRow(
+          leading: const HiuiIcon(HiuiIcons.time),
+          title: const MiuixText('时长'),
+          subtitle: MiuixText(MsDateUtils.formatDuration(dur)),
         ),
-        ListTile(
-          leading: const Icon(Icons.audiotrack_outlined),
-          title: const Text('原始文件'),
+        AppListRow(
+          leading: const HiuiIcon(HiuiIcons.audio),
+          title: const MiuixText('原始文件'),
           // 隐私考虑：只展示文件名，不展示应用内部完整路径。
-          subtitle: Text(meta['originalName'] as String? ??
+          subtitle: MiuixText(meta['originalName'] as String? ??
               _fileNameOf(meta['originalPath'] as String?)),
         ),
         if (tStart != null || tEnd != null)
-          ListTile(
-            leading: const Icon(Icons.content_cut),
-            title: const Text('裁剪区间'),
-            subtitle: Text(
+          AppListRow(
+            leading: const HiuiIcon(HiuiIcons.cut),
+            title: const MiuixText('裁剪区间'),
+            subtitle: MiuixText(
                 '${MsDateUtils.formatDuration(tStart ?? 0)} ~ ${MsDateUtils.formatDuration(tEnd ?? dur)}'),
           ),
-        ListTile(
-          leading: const Icon(Icons.schedule),
-          title: const Text('创建时间'),
-          subtitle: Text(MsDateUtils.formatFull(memo.createdAt)),
+        AppListRow(
+          leading: const HiuiIcon(HiuiIcons.time),
+          title: const MiuixText('创建时间'),
+          subtitle: MiuixText(MsDateUtils.formatFull(memo.createdAt)),
         ),
       ],
     );

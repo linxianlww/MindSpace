@@ -33,8 +33,6 @@ class AppConstants {
 
   // —— SharedPreferences 键 ——
   static const String prefThemeMode = 'pref.theme_mode'; // light/dark/system
-  static const String prefDynamicColor = 'pref.dynamic_color'; // bool
-  static const String prefSeedColor = 'pref.seed_color'; // int
   static const String prefSortField = 'pref.sort_field'; // createdAt/updatedAt/title
   static const String prefSortAsc = 'pref.sort_asc'; // bool
   static const String prefLineHeight = 'pref.line_height'; // double：文本阅读行距

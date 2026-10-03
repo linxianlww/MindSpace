@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../core/di/providers.dart';
 import '../../core/settings/private_space_service.dart';
@@ -16,104 +16,115 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
     final hasPin = service.hasPin;
     final biometricEnabled = service.biometricEnabled;
     final canUseBiometric = service.canCheckBiometrics;
+    final miuixTheme = MiuixTheme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('私密空间')),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+    return AppScaffold(
+      topBar: AppHeader(title: '私密空间'),
+      content: (context, padding) => ListView(
+        padding: padding,
         children: [
           // PIN 码设置
-          _SectionHeader('PIN 码保护'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.pin_outlined),
-                  title: Text(hasPin ? '修改 PIN 码' : '创建 PIN 码'),
-                  subtitle: Text(hasPin ? '已设置 6 位 PIN 码' : '私密空间将使用 PIN 码保护'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _onPinTap(context, ref, service),
-                ),
-                if (hasPin) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: Icon(Icons.lock_open_outlined,
-                        color: Theme.of(context).colorScheme.outline),
-                    title: const Text('立即锁定'),
-                    subtitle: const Text('清空已解锁会话'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await service.lock();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('私密空间已锁定')),
-                        );
-                      }
-                    },
+          MiuixSmallTitle('PIN 码保护'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MiuixSurface(
+              cornerRadius: AppTokens.radiusMedium,
+              color: miuixTheme.colors.surfaceContainer,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppSettingsRow(
+                    title: hasPin ? '修改 PIN 码' : '创建 PIN 码',
+                    summary: hasPin ? '已设置 6 位 PIN 码' : '私密空间将使用 PIN 码保护',
+                    startAction: HiuiIcon(HiuiIcons.pin),
+                    onClick: () => _onPinTap(context, ref, service),
                   ),
+                  if (hasPin)
+                    // 即时动作（非页面跳转），不用带箭头的 ArrowPreference
+                    MiuixBasicComponent(
+                      title: '立即锁定',
+                      summary: '清空已解锁会话',
+                      startAction: HiuiIcon(HiuiIcons.unlock,
+                          color: miuixTheme.colors.onSurfaceVariantSummary),
+                      onClick: () async {
+                        await service.lock();
+                        if (context.mounted) {
+                          AppSnackbar.show(context, message: '私密空间已锁定');
+                        }
+                      },
+                    ),
                 ],
-              ],
+              ),
             ),
           ),
 
           const SizedBox(height: 16),
 
           // 生物识别
-          _SectionHeader('生物识别解锁'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.fingerprint),
-                  title: const Text('生物识别解锁'),
-                  subtitle: Text(_biometricSubtitle(service, canUseBiometric)),
-                  value: biometricEnabled,
-                  onChanged: canUseBiometric
-                      ? (v) => _onBiometricToggle(context, ref, service, v)
-                      : null,
-                ),
-                if (!canUseBiometric)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Text(
-                      '当前设备不支持或未注册生物识别',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline),
-                    ),
+          MiuixSmallTitle('生物识别解锁'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MiuixSurface(
+              cornerRadius: AppTokens.radiusMedium,
+              color: miuixTheme.colors.surfaceContainer,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MiuixSwitchPreference(
+                    value: biometricEnabled,
+                    onChanged: canUseBiometric
+                        ? (v) => _onBiometricToggle(context, ref, service, v)
+                        : (v) {},
+                    title: '生物识别解锁',
+                    summary: _biometricSubtitle(service, canUseBiometric),
+                    startAction: HiuiIcon(HiuiIcons.fingerprint),
                   ),
-              ],
+                  if (!canUseBiometric)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: MiuixText(
+                        '当前设备不支持或未注册生物识别',
+                        style: miuixTheme.textStyles.footnote1.copyWith(
+                            color: miuixTheme.colors.onSurfaceVariantSummary),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
 
           const SizedBox(height: 16),
 
           // 截屏保护
-          _SectionHeader('截屏保护'),
-          Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              children: [
-                SwitchListTile(
-                  secondary: const Icon(Icons.screenshot_outlined),
-                  title: const Text('私密空间禁止截屏'),
-                  subtitle: const Text('开启后，私密空间解锁期间本应用不可截屏/录屏'),
-                  value: service.screenshotProtectionEnabled,
-                  onChanged: hasPin
-                      ? (v) => _onScreenshotToggle(context, service, v)
-                      : null,
-                ),
-                if (!hasPin)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Text(
-                      '请先创建 PIN 码后再启用',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline),
-                    ),
+          MiuixSmallTitle('截屏保护'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: MiuixSurface(
+              cornerRadius: AppTokens.radiusMedium,
+              color: miuixTheme.colors.surfaceContainer,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  MiuixSwitchPreference(
+                    value: service.screenshotProtectionEnabled,
+                    onChanged: hasPin
+                        ? (v) => _onScreenshotToggle(context, service, v)
+                        : (v) {},
+                    title: '私密空间禁止截屏',
+                    summary: '开启后，私密空间解锁期间本应用不可截屏/录屏',
+                    startAction: HiuiIcon(HiuiIcons.screenshot),
                   ),
-              ],
+                  if (!hasPin)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: MiuixText(
+                        '请先创建 PIN 码后再启用',
+                        style: miuixTheme.textStyles.footnote1.copyWith(
+                            color: miuixTheme.colors.onSurfaceVariantSummary),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
 
@@ -134,8 +145,8 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
     return names.isEmpty ? '可用' : names.join(' / ');
   }
 
-  Future<void> _onPinTap(BuildContext context, WidgetRef ref,
-      PrivateSpaceService service) async {
+  Future<void> _onPinTap(
+      BuildContext context, WidgetRef ref, PrivateSpaceService service) async {
     if (service.hasPin) {
       // 修改模式：先验证旧 PIN，再创建新 PIN
       await showPinInputDialog(
@@ -144,9 +155,7 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
         onVerify: (pin) async {
           final ok = service.verifyPin(pin);
           if (!ok && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('当前 PIN 码错误')),
-            );
+            AppSnackbar.show(context, message: '当前 PIN 码错误');
           }
           return ok;
         },
@@ -170,9 +179,8 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
       onCreated: (pin) async {
         final ok = await service.setPin(pin, oldPin: oldPin);
         if (ok && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(oldPin != null ? 'PIN 码已更新' : 'PIN 码已创建')),
-          );
+          AppSnackbar.show(context,
+              message: oldPin != null ? 'PIN 码已更新' : 'PIN 码已创建');
         }
       },
     );
@@ -183,9 +191,7 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
     if (!enable) {
       await service.disableBiometric();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已关闭生物识别')),
-        );
+        AppSnackbar.show(context, message: '已关闭生物识别');
       }
       return;
     }
@@ -198,13 +204,9 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
         final ok = await service.enableBiometric(pin);
         if (context.mounted) {
           if (ok) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('生物识别已启用')),
-            );
+            AppSnackbar.show(context, message: '生物识别已启用');
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('启用失败，请检查设备支持')),
-            );
+            AppSnackbar.show(context, message: '启用失败，请检查设备支持');
           }
         }
         return ok;
@@ -216,27 +218,7 @@ class PrivateSpaceSettingsPage extends ConsumerWidget {
       BuildContext context, PrivateSpaceService service, bool enable) async {
     await service.setScreenshotProtectionEnabled(enable);
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(enable ? '已开启截屏保护' : '已关闭截屏保护')),
-      );
+      AppSnackbar.show(context, message: enable ? '已开启截屏保护' : '已关闭截屏保护');
     }
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 16, 8),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: Theme.of(context).colorScheme.primary),
-      ),
-    );
   }
 }

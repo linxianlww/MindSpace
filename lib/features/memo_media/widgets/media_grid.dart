@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../../core/utils/screen_utils.dart';
 import '../../../data/models/media_item.dart';
@@ -42,34 +42,44 @@ class MediaGrid extends StatelessWidget {
           children: [
             Positioned.fill(child: MediaThumb(item: item, editMode: editMode)),
             if (editMode)
+              // 删除角标：MiuixPressable 补上按压反馈（原裸 GestureDetector 无反馈）。
+              // 放右上角，与左上角的拖拽柄错开，避免两个手势区互相遮挡。
               Positioned(
                 right: 4,
                 top: 4,
-                child: GestureDetector(
-                  onTap: () => onRemove?.call(item),
-                  child: const CircleAvatar(
+                child: MiuixPressable(
+                  onPressed: () => onRemove?.call(item),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AppAvatar(
                     radius: 14,
                     backgroundColor: Colors.black54,
-                    child: Icon(Icons.close, size: 16, color: Colors.white),
+                    child: const HiuiIcon(HiuiIcons.close,
+                        size: 16, color: Colors.white),
                   ),
                 ),
               ),
             if (editMode)
-              const Positioned(
+              Positioned(
                 left: 4,
                 top: 4,
-                child: CircleAvatar(
+                child: AppAvatar(
                   radius: 12,
                   backgroundColor: Colors.black45,
-                  child:
-                      Icon(Icons.drag_indicator, size: 16, color: Colors.white),
+                  child: const HiuiIcon(HiuiIcons.drag,
+                      size: 16, color: Colors.white),
                 ),
               ),
           ],
         );
 
         if (!editMode) {
-          return GestureDetector(onTap: () => onTap(i), child: cell);
+          // 浏览模式：MiuixPressable 提供 sink 按压反馈，视觉不变。
+          return MiuixPressable(
+            onPressed: () => onTap(i),
+            feedbackType: MiuixPressFeedbackType.sink,
+            shape: MiuixSquircleBorder(cornerRadius: AppTokens.radiusMedium),
+            child: cell,
+          );
         }
         // 编辑模式：长按拖拽排序。
         return LongPressDraggable<MediaItem>(
@@ -87,18 +97,23 @@ class MediaGrid extends StatelessWidget {
               final from = items.indexWhere((e) => e.id == d.data.id);
               if (from >= 0) onReorder(from, i);
             },
-            builder: (context, candidate, _) => GestureDetector(
-              onTap: () => onTap(i),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  border: candidate.isNotEmpty
-                      ? Border.all(
-                          color: Theme.of(context).colorScheme.primary,
+            builder: (context, candidate, _) => AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              decoration: ShapeDecoration(
+                shape: MiuixSquircleBorder(
+                  cornerRadius: AppTokens.radiusMedium,
+                  side: candidate.isNotEmpty
+                      ? BorderSide(
+                          color: MiuixTheme.of(context).colors.primary,
                           width: 2)
-                      : null,
+                      : BorderSide.none,
                 ),
+              ),
+              child: MiuixPressable(
+                onPressed: () => onTap(i),
+                feedbackType: MiuixPressFeedbackType.sink,
+                shape:
+                    MiuixSquircleBorder(cornerRadius: AppTokens.radiusMedium),
                 child: cell,
               ),
             ),

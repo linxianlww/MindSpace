@@ -1,8 +1,7 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
-import '../../../core/theme/md3e_tokens.dart';
 import '../../../core/utils/ms_date_utils.dart';
 import '../../../data/models/media_item.dart';
 import '../../../data/models/memo_type.dart';
@@ -29,7 +28,7 @@ class MediaThumb extends StatelessWidget {
       } else {
         content = _placeholder(
           context,
-          icon: Icons.broken_image_outlined,
+          icon: HiuiIcons.noPhoto,
           caption: null,
         );
       }
@@ -37,7 +36,7 @@ class MediaThumb extends StatelessWidget {
       // 视频：播放占位 + 时长，右上角再叠加摄像头角标。
       content = _placeholder(
         context,
-        icon: Icons.play_circle_fill_rounded,
+        icon: HiuiIcons.play,
         caption: item.durationMs != null
             ? MsDateUtils.formatDuration(item.durationMs!)
             : null,
@@ -48,7 +47,8 @@ class MediaThumb extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          // 缩略图圆角：卡片内第三级裁切，取 radiusMedium
+          borderRadius: BorderRadius.circular(AppTokens.radiusMedium),
           child: content,
         ),
         if (item.remark != null && item.remark!.isNotEmpty)
@@ -56,23 +56,29 @@ class MediaThumb extends StatelessWidget {
             left: 6,
             bottom: 6,
             right: 6,
+            // 图片上的备注角标：黑底白字保证任何缩略图上的可读性
+            // （黑/白为叠加层的功能性硬编码，媒体查看器同规则）。
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
+              decoration: ShapeDecoration(
                 color: Colors.black54,
-                borderRadius: BorderRadius.circular(Md3eTokens.radiusChip),
+                shape: MiuixSquircleBorder(
+                    cornerRadius: AppTokens.radiusChip),
               ),
-              child: Text(
+              child: MiuixText(
                 item.remark!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 10),
+                style: MiuixTheme.of(context)
+                    .textStyles
+                    .footnote2
+                    .copyWith(color: Colors.white),
               ),
             ),
           ),
         if (item.kind == MediaKind.video)
           const Center(
-            child: Icon(Icons.videocam_rounded, color: Colors.white70, size: 20),
+            child: HiuiIcon(HiuiIcons.video, color: Colors.white70, size: 20),
           ),
       ],
     );
@@ -80,18 +86,18 @@ class MediaThumb extends StatelessWidget {
 
   Widget _placeholder(
     BuildContext context, {
-    required IconData icon,
+    required String icon,
     required String? caption,
   }) {
-    final theme = Theme.of(context);
+    final theme = MiuixTheme.of(context);
     return Container(
-      color: theme.colorScheme.surfaceContainerHighest,
+      color: theme.colors.surfaceContainerHighest,
       alignment: Alignment.center,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 36, color: theme.colorScheme.primary),
-          if (caption != null) Text(caption, style: theme.textTheme.labelSmall),
+          HiuiIcon(icon, size: 36, color: theme.colors.primary),
+          if (caption != null) MiuixText(caption, style: theme.textStyles.footnote2),
         ],
       ),
     );

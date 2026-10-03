@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:mindspace/ui/design_system/app_design_system.dart';
 
 import '../../../data/models/subtitle_item.dart';
 
@@ -59,9 +59,10 @@ class _SubtitleViewState extends State<SubtitleView> {
   @override
   Widget build(BuildContext context) {
     if (widget.subs.isEmpty) {
-      return const Center(child: Text('暂无字幕，可在下方导入 lrc/srt/txt'));
+      return const Center(child: MiuixText('暂无字幕，可在下方导入 lrc/srt/txt'));
     }
-    final scheme = Theme.of(context).colorScheme;
+    final theme = MiuixTheme.of(context);
+    final scheme = theme.colors;
     return ListView.builder(
       controller: _scroll,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -70,15 +71,18 @@ class _SubtitleViewState extends State<SubtitleView> {
         final s = widget.subs[i];
         final active = i == widget.activeIndex;
         _ctxByIndex[i] = context;
-        return GestureDetector(
-          onTap: () => widget.onTap(i),
+        // 字幕行：MiuixSurface 提供按压反馈（替代裸 GestureDetector）；
+        // 背景透明（行容器，无填充语义）。
+        return MiuixSurface(
+          onPressed: () => widget.onTap(i),
+          cornerRadius: 0,
+          color: Colors.transparent,
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 200),
-            style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                  color: active
-                      ? scheme.primary
-                      : scheme.onSurfaceVariant,
+            style: theme.textStyles.body1.copyWith(
+                  color: active ? scheme.primary : scheme.onSurfaceSecondary,
                   fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                  // 选中行字号放大为交互反馈的一部分（18 活跃 / 15 常态）
                   fontSize: active ? 18 : 15,
                 ),
             child: Padding(
